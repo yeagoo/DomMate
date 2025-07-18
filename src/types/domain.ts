@@ -12,7 +12,7 @@ export interface Domain {
   updatedAt: Date;
 }
 
-export type DomainStatus = 'normal' | 'expiring' | 'expired' | 'failed';
+export type DomainStatus = 'normal' | 'expiring' | 'expired' | 'failed' | 'unregistered';
 
 export interface WhoisData {
   domain: string;

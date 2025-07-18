@@ -3,112 +3,95 @@ import { DomainImportDialog } from './DomainImportDialog';
 import { DomainTable } from './DomainTable';
 import { Button } from '@/components/ui/button';
 import { RefreshCw } from 'lucide-react';
+import { apiService } from '@/lib/api';
 import type { Domain, ImportResult } from '@/types/domain';
 
-// 模拟数据
-const mockDomains: Domain[] = [
-  {
-    id: '1',
-    domain: 'example.com',
-    registrar: 'Namecheap',
-    expiresAt: new Date('2024-06-15'),
-    dnsProvider: 'Cloudflare',
-    domainStatus: 'clientTransferProhibited',
-    status: 'expiring',
-    lastCheck: new Date('2024-01-15T10:30:00'),
-    notifications: true,
-    createdAt: new Date('2024-01-01'),
-    updatedAt: new Date('2024-01-15'),
-  },
-  {
-    id: '2',
-    domain: 'google.com',
-    registrar: 'MarkMonitor Inc.',
-    expiresAt: new Date('2024-09-14'),
-    dnsProvider: 'Google',
-    domainStatus: 'clientDeleteProhibited clientTransferProhibited',
-    status: 'normal',
-    lastCheck: new Date('2024-01-15T09:15:00'),
-    notifications: true,
-    createdAt: new Date('2024-01-01'),
-    updatedAt: new Date('2024-01-15'),
-  },
-  {
-    id: '3',
-    domain: 'expired-domain.com',
-    registrar: 'GoDaddy',
-    expiresAt: new Date('2023-12-01'),
-    dnsProvider: 'GoDaddy DNS',
-    domainStatus: 'pendingDelete',
-    status: 'expired',
-    lastCheck: new Date('2024-01-15T08:45:00'),
-    notifications: false,
-    createdAt: new Date('2024-01-01'),
-    updatedAt: new Date('2024-01-15'),
-  },
-];
-
 export default function Dashboard() {
-  const [domains, setDomains] = useState<Domain[]>(mockDomains);
+  const [domains, setDomains] = useState<Domain[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
+
+  // 初始化加载域名数据
+  useEffect(() => {
+    const loadDomains = async () => {
+      try {
+        const domainData = await apiService.getDomains();
+        setDomains(domainData);
+      } catch (error) {
+        console.error('Failed to load domains:', error);
+      } finally {
+        setIsInitialLoading(false);
+      }
+    };
+
+    loadDomains();
+  }, []);
 
   const handleImport = async (domainNames: string[]): Promise<ImportResult> => {
     setIsLoading(true);
     
-    // 模拟 API 调用
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    
-    const success: Domain[] = [];
-    const errors: string[] = [];
-    
-    domainNames.forEach((domainName, index) => {
-      // 简单的域名验证
-      if (!/^[a-zA-Z0-9][a-zA-Z0-9-]{1,61}[a-zA-Z0-9]\.[a-zA-Z]{2,}$/.test(domainName)) {
-        errors.push(`${domainName}: 无效的域名格式`);
-        return;
-      }
+    try {
+      const result = await apiService.importDomains(domainNames);
       
-      // 检查是否已存在
-      if (domains.some(d => d.domain === domainName)) {
-        errors.push(`${domainName}: 域名已存在`);
-        return;
-      }
+      // 刷新域名列表
+      const updatedDomains = await apiService.getDomains();
+      setDomains(updatedDomains);
       
-      success.push({
-        id: Date.now().toString() + index,
-        domain: domainName,
-        status: 'failed', // 初始状态，需要后续查询
-        notifications: true,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      });
-    });
-    
-    setDomains(prev => [...prev, ...success]);
-    setIsLoading(false);
-    
-    return { success, errors, total: domainNames.length };
+      return result;
+    } catch (error) {
+      console.error('Failed to import domains:', error);
+      return {
+        success: [],
+        errors: [`导入失败: ${error instanceof Error ? error.message : '未知错误'}`],
+        total: domainNames.length
+      };
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const handleToggleNotifications = (domainId: string) => {
-    setDomains(prev => prev.map(domain => 
-      domain.id === domainId 
-        ? { ...domain, notifications: !domain.notifications }
-        : domain
-    ));
+  const handleToggleNotifications = async (domainId: string) => {
+    const domain = domains.find(d => d.id === domainId);
+    if (!domain) return;
+
+    try {
+      await apiService.toggleNotifications(domainId, !domain.notifications);
+      
+      // 更新本地状态
+      setDomains(prev => prev.map(d => 
+        d.id === domainId 
+          ? { ...d, notifications: !d.notifications }
+          : d
+      ));
+    } catch (error) {
+      console.error('Failed to toggle notifications:', error);
+    }
   };
 
   const handleRefreshDomain = async (domainId: string) => {
-    // 实际实现中会调用 WHOIS API
-    console.log('Refreshing domain:', domainId);
+    try {
+      await apiService.refreshDomain(domainId);
+      
+      // 刷新域名列表以获取最新数据
+      const updatedDomains = await apiService.getDomains();
+      setDomains(updatedDomains);
+    } catch (error) {
+      console.error('Failed to refresh domain:', error);
+    }
   };
 
   const handleRefreshAll = async () => {
     setIsRefreshing(true);
-    // 模拟批量刷新
-    await new Promise(resolve => setTimeout(resolve, 3000));
-    setIsRefreshing(false);
+    try {
+      // 刷新所有域名数据
+      const updatedDomains = await apiService.getDomains();
+      setDomains(updatedDomains);
+    } catch (error) {
+      console.error('Failed to refresh domains:', error);
+    } finally {
+      setIsRefreshing(false);
+    }
   };
 
   const stats = {
@@ -118,6 +101,17 @@ export default function Dashboard() {
     expired: domains.filter(d => d.status === 'expired').length,
     failed: domains.filter(d => d.status === 'failed').length,
   };
+
+  if (isInitialLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-center">
+          <RefreshCw className="h-8 w-8 animate-spin mx-auto mb-4 text-muted-foreground" />
+          <p className="text-muted-foreground">正在加载域名数据...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

@@ -24,6 +24,7 @@ const statusConfig = {
   expiring: { label: '🟡 即将到期', variant: 'warning' as const },
   expired: { label: '🔴 已过期', variant: 'error' as const },
   failed: { label: '⚪️ 查询失败', variant: 'secondary' as const },
+  unregistered: { label: '🔵 未注册', variant: 'outline' as const },
 };
 
 export function DomainTable({ domains, onToggleNotifications, onRefreshDomain }: DomainTableProps) {

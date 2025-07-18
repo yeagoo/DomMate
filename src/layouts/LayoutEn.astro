@@ -1,0 +1,60 @@
+---
+export interface Props {
+  title?: string;
+  description?: string;
+}
+
+const { title = 'DomainFlow', description = 'Domain monitoring platform' } = Astro.props;
+---
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="description" content={description} />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <title>{title}</title>
+  </head>
+  <body>
+    <div class="min-h-screen bg-background font-sans antialiased">
+      <header class="border-b">
+        <div class="container mx-auto px-4 py-4">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center space-x-4">
+              <h1 class="text-2xl font-bold text-primary">DomainFlow</h1>
+              <span class="text-sm text-muted-foreground">Domain Monitoring Platform</span>
+            </div>
+            <div class="flex items-center space-x-4">
+              <!-- Theme toggle -->
+              <div id="theme-toggle-en"></div>
+              
+              <!-- Language switcher -->
+              <div class="flex items-center space-x-2">
+                <a href="/" class="text-sm hover:text-primary">中文</a>
+                <span class="text-muted-foreground">|</span>
+                <a href="/en" class="text-sm hover:text-primary">English</a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </header>
+      
+      <main class="container mx-auto px-4 py-8">
+        <slot />
+      </main>
+      
+      <footer class="border-t mt-auto">
+        <div class="container mx-auto px-4 py-6">
+          <div class="text-center text-sm text-muted-foreground">
+            <p>&copy; 2024 DomainFlow. Professional domain monitoring solution.</p>
+          </div>
+        </div>
+      </footer>
+    </div>
+  </body>
+</html>
+
+<style is:global>
+  @import '../styles/globals.css';
+</style> 
