@@ -1,0 +1,80 @@
+{
+  "app": {
+    "title": "DomainFlow",
+    "subtitle": "Domain Monitoring Platform",
+    "description": "Professional domain expiration monitoring solution"
+  },
+  "nav": {
+    "home": "Home",
+    "dashboard": "Dashboard",
+    "settings": "Settings"
+  },
+  "domain": {
+    "import": "Import Domains",
+    "add": "Add Domain",
+    "list": "Domain List",
+    "total": "Total Domains",
+    "search": "Search domains or registrars...",
+    "refresh_all": "Refresh All",
+    "refreshing": "Refreshing..."
+  },
+  "import": {
+    "title": "Import Domains",
+    "description": "Choose an import method to batch add domains for monitoring",
+    "methods": {
+      "lines": "Line by Line",
+      "file": "File Import",
+      "string": "String Import"
+    },
+    "placeholders": {
+      "lines": "Enter one domain per line",
+      "string": "Separate multiple domains with commas"
+    },
+    "file": {
+      "upload": "Upload File",
+      "template": "Download Template",
+      "support": "Supports CSV and TXT formats. For CSV files, ensure domains are in the first column."
+    },
+    "actions": {
+      "cancel": "Cancel",
+      "import": "Import Domains",
+      "importing": "Importing..."
+    }
+  },
+  "table": {
+    "headers": {
+      "domain": "Domain",
+      "registrar": "Registrar", 
+      "expires": "Expires At",
+      "dns": "DNS Provider",
+      "status": "Domain Status",
+      "badge": "Status Badge",
+      "lastCheck": "Last Check",
+      "notifications": "Notifications"
+    }
+  },
+  "status": {
+    "normal": "🟢 Normal",
+    "expiring": "🟡 Expiring Soon",
+    "expired": "🔴 Expired",
+    "failed": "⚪️ Query Failed"
+  },
+  "stats": {
+    "normal": "Normal",
+    "expiring": "Expiring",
+    "expired": "Expired",
+    "failed": "Failed"
+  },
+  "time": {
+    "days_after": "%d days from now",
+    "days_ago": "%d days ago",
+    "hours_ago": "%d hours ago",
+    "minutes_ago": "%d minutes ago",
+    "just_now": "Just now",
+    "today": "Today"
+  },
+  "messages": {
+    "no_domains": "No domain data",
+    "no_results": "No matching domains found"
+  }
+} 

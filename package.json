@@ -1,0 +1,50 @@
+{
+  "name": "domainflow",
+  "type": "module",
+  "version": "0.1.0",
+  "description": "一个极简美学、支持多种导入方式的域名到期自动监控平台",
+  "scripts": {
+    "dev": "astro dev",
+    "start": "astro dev",
+    "build": "astro check && astro build",
+    "preview": "astro preview",
+    "astro": "astro",
+    "check": "astro check",
+    "server": "node server/index.js",
+    "server:dev": "node --watch server/index.js"
+  },
+  "dependencies": {
+    "@astrojs/check": "^0.5.10",
+    "@astrojs/node": "^8.2.5",
+    "@astrojs/react": "^3.1.0",
+    "@astrojs/tailwind": "^5.1.0",
+    "@radix-ui/react-dialog": "^1.0.5",
+    "@radix-ui/react-slot": "^1.0.2",
+    "@radix-ui/react-tabs": "^1.0.4",
+    "@radix-ui/react-label": "^2.0.2",
+    "@radix-ui/react-switch": "^1.0.3",
+    "astro": "^4.5.0",
+    "class-variance-authority": "^0.7.0",
+    "clsx": "^2.1.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "tailwind-merge": "^2.2.2",
+    "tailwindcss-animate": "^1.0.7",
+    "lucide-react": "^0.363.0",
+    "whois": "^2.13.8",
+    "node-cron": "^3.0.3",
+    "csv-parser": "^3.0.0",
+    "multer": "^2.0.0-alpha.8",
+    "express": "^4.19.2",
+    "cors": "^2.8.5"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.30",
+    "@types/react": "^18.2.73",
+    "@types/react-dom": "^18.2.23",
+    "@types/multer": "^1.4.11",
+    "@types/cors": "^2.8.17",
+    "tailwindcss": "^3.4.1",
+    "typescript": "^5.4.2"
+  }
+} 
