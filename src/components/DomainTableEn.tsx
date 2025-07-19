@@ -10,27 +10,69 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Search, Bell, BellOff, ArrowUpDown } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Search, Bell, BellOff, ArrowUpDown, AlertTriangle, CheckCircle2, Clock, XCircle, Circle, AlertCircle, Trash2 } from 'lucide-react';
 import type { Domain } from '@/types/domain';
 
 interface DomainTableEnProps {
   domains: Domain[];
   onToggleNotifications: (domainId: string) => void;
   onRefreshDomain: (domainId: string) => void;
+  onDeleteDomains?: (domainIds: string[]) => void;
 }
 
 const statusConfig = {
-  normal: { label: '🟢 Normal', variant: 'success' as const },
-  expiring: { label: '🟡 Expiring Soon', variant: 'warning' as const },
-  expired: { label: '🔴 Expired', variant: 'error' as const },
-  failed: { label: '⚪️ Query Failed', variant: 'secondary' as const },
-  unregistered: { label: '🔵 Unregistered', variant: 'outline' as const },
+  normal: { icon: CheckCircle2, label: 'Normal', variant: 'success' as const, color: 'text-white' },
+  expiring: { icon: Clock, label: 'Expiring', variant: 'warning' as const, color: 'text-white' },
+  expired: { icon: XCircle, label: 'Expired', variant: 'error' as const, color: 'text-white' },
+  failed: { icon: AlertCircle, label: 'Query Failed', variant: 'secondary' as const, color: 'text-gray-600' },
+  unregistered: { icon: Circle, label: 'Unregistered', variant: 'outline' as const, color: 'text-blue-600' },
 };
 
-export function DomainTableEn({ domains, onToggleNotifications, onRefreshDomain }: DomainTableEnProps) {
+const renderStatusLabel = (status: keyof typeof statusConfig) => {
+  const config = statusConfig[status];
+  const Icon = config.icon;
+  return (
+    <div className="flex items-center gap-1 min-w-[100px] justify-center">
+      <Icon className={`h-3 w-3 ${config.color}`} />
+      <span>{config.label}</span>
+    </div>
+  );
+};
+
+// 域名状态中英文翻译映射
+const translateDomainStatus = (chineseStatus: string): string => {
+  const statusMap: Record<string, string> = {
+    '正常': 'OK',
+    '禁止转移': 'Transfer Prohibited',
+    '禁止更新': 'Update Prohibited', 
+    '禁止删除': 'Delete Prohibited',
+    '服务器禁止转移': 'Server Transfer Prohibited',
+    '服务器禁止更新': 'Server Update Prohibited',
+    '服务器禁止删除': 'Server Delete Prohibited',
+    '非活跃状态': 'Inactive',
+    '活跃': 'Active',
+    '已锁定': 'Locked',
+    '已过期': 'Expired',
+    '待处理': 'Pending'
+  };
+
+  // 处理逗号分隔的多个状态
+  if (chineseStatus.includes(',')) {
+    return chineseStatus.split(',')
+      .map(status => status.trim())
+      .map(status => statusMap[status] || status)
+      .join(', ');
+  }
+
+  return statusMap[chineseStatus] || chineseStatus;
+};
+
+export function DomainTableEn({ domains, onToggleNotifications, onRefreshDomain, onDeleteDomains }: DomainTableEnProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [sortField, setSortField] = useState<keyof Domain>('expiresAt');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+  const [selectedDomains, setSelectedDomains] = useState<Set<string>>(new Set());
 
   const filteredDomains = domains.filter(domain =>
     domain.domain.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -59,6 +101,35 @@ export function DomainTableEn({ domains, onToggleNotifications, onRefreshDomain 
     }
   };
 
+  const handleSelectDomain = (domainId: string, checked: boolean) => {
+    const newSelected = new Set(selectedDomains);
+    if (checked) {
+      newSelected.add(domainId);
+    } else {
+      newSelected.delete(domainId);
+    }
+    setSelectedDomains(newSelected);
+  };
+
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      const allIds = new Set(sortedDomains.map(domain => domain.id));
+      setSelectedDomains(allIds);
+    } else {
+      setSelectedDomains(new Set());
+    }
+  };
+
+  const handleDeleteSelected = () => {
+    if (selectedDomains.size > 0 && onDeleteDomains) {
+      onDeleteDomains(Array.from(selectedDomains));
+      setSelectedDomains(new Set());
+    }
+  };
+
+  const isAllSelected = sortedDomains.length > 0 && selectedDomains.size === sortedDomains.length;
+  const isIndeterminate = selectedDomains.size > 0 && selectedDomains.size < sortedDomains.length;
+
   const formatDate = (date: Date | undefined) => {
     if (!date) return '-';
     return new Intl.DateTimeFormat('en-US', {
@@ -69,19 +140,36 @@ export function DomainTableEn({ domains, onToggleNotifications, onRefreshDomain 
   };
 
   const formatRelativeTime = (date: Date | undefined) => {
-    if (!date) return '-';
+    if (!date) return { text: '-', className: '', warning: false };
     const now = new Date();
     const target = new Date(date);
     const diffTime = target.getTime() - now.getTime();
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     
+    let text = '';
+    let className = '';
+    let warning = false;
+    
     if (diffDays > 0) {
-      return `in ${diffDays} days`;
+      text = `in ${diffDays} days`;
+      if (diffDays <= 7) {
+        className = 'text-red-600 font-semibold';
+        warning = true;
+      } else if (diffDays <= 30) {
+        className = 'text-red-600';
+      } else if (diffDays <= 90) {
+        className = 'text-orange-600';
+      }
     } else if (diffDays === 0) {
-      return 'today';
+      text = 'today';
+      className = 'text-red-600 font-semibold';
+      warning = true;
     } else {
-      return `${Math.abs(diffDays)} days ago`;
+      text = `${Math.abs(diffDays)} days ago`;
+      className = 'text-gray-500';
     }
+    
+    return { text, className, warning };
   };
 
   const getTimeAgo = (date: Date | undefined) => {
@@ -116,63 +204,90 @@ export function DomainTableEn({ domains, onToggleNotifications, onRefreshDomain 
             className="pl-8"
           />
         </div>
+        {selectedDomains.size > 0 && (
+          <Button
+            variant="destructive"
+            onClick={handleDeleteSelected}
+            className="flex items-center gap-2"
+          >
+            <Trash2 className="h-4 w-4" />
+            Delete Selected ({selectedDomains.size})
+          </Button>
+        )}
       </div>
 
       <div className="rounded-md border">
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead className="text-center w-12">
+                <Checkbox
+                  checked={isAllSelected}
+                  onChange={handleSelectAll}
+                  className={isIndeterminate ? 'opacity-60' : ''}
+                />
+              </TableHead>
               <TableHead 
-                className="cursor-pointer hover:bg-muted/50"
+                className="cursor-pointer hover:bg-muted/50 text-center"
                 onClick={() => handleSort('domain')}
               >
-                <div className="flex items-center">
+                <div className="flex items-center justify-center">
                   Domain
                   <ArrowUpDown className="ml-2 h-4 w-4" />
                 </div>
               </TableHead>
-              <TableHead>Registrar</TableHead>
+              <TableHead className="text-center">Registrar</TableHead>
               <TableHead 
-                className="cursor-pointer hover:bg-muted/50"
+                className="cursor-pointer hover:bg-muted/50 text-center min-w-[120px]"
                 onClick={() => handleSort('expiresAt')}
               >
-                <div className="flex items-center">
-                  Expires At
+                <div className="flex items-center justify-center">
+                  <span className="whitespace-nowrap">Expires At</span>
                   <ArrowUpDown className="ml-2 h-4 w-4" />
                 </div>
               </TableHead>
-              <TableHead>DNS Provider</TableHead>
-              <TableHead>Domain Status</TableHead>
-              <TableHead>Status Badge</TableHead>
-              <TableHead>Last Check</TableHead>
+              <TableHead className="text-center">DNS Provider</TableHead>
+              <TableHead className="text-center">Domain Status</TableHead>
+              <TableHead className="text-center">Status Badge</TableHead>
+              <TableHead className="text-center">Last Check</TableHead>
               <TableHead>Notifications</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {sortedDomains.map((domain) => (
               <TableRow key={domain.id}>
-                <TableCell className="font-medium">{domain.domain}</TableCell>
-                <TableCell>{domain.registrar || '-'}</TableCell>
-                <TableCell>
+                <TableCell className="text-center w-12">
+                  <Checkbox
+                    checked={selectedDomains.has(domain.id)}
+                    onChange={(checked) => handleSelectDomain(domain.id, checked)}
+                  />
+                </TableCell>
+                <TableCell className="font-medium text-center">{domain.domain}</TableCell>
+                <TableCell className="text-center">{domain.registrar || '-'}</TableCell>
+                <TableCell className="text-center min-w-[120px]">
                   <div className="space-y-1">
-                    <div>{formatDate(domain.expiresAt)}</div>
-                    {domain.expiresAt && (
-                      <div className="text-xs text-muted-foreground">
-                        {formatRelativeTime(domain.expiresAt)}
-                      </div>
-                    )}
+                    <div className="whitespace-nowrap">{formatDate(domain.expiresAt)}</div>
+                    {domain.expiresAt && (() => {
+                      const timeInfo = formatRelativeTime(domain.expiresAt);
+                      return (
+                        <div className={`text-xs ${timeInfo.className || 'text-muted-foreground'} flex items-center justify-center gap-1`}>
+                          {timeInfo.warning && <AlertTriangle className="h-3 w-3 text-red-600" />}
+                          {timeInfo.text}
+                        </div>
+                      );
+                    })()}
                   </div>
                 </TableCell>
-                <TableCell>{domain.dnsProvider || '-'}</TableCell>
-                <TableCell className="max-w-[200px] truncate">
-                  {domain.domainStatus || '-'}
+                <TableCell className="text-center">{domain.dnsProvider || '-'}</TableCell>
+                <TableCell className="max-w-[200px] truncate text-center">
+                  {domain.domainStatus ? translateDomainStatus(domain.domainStatus) : '-'}
                 </TableCell>
-                <TableCell>
+                <TableCell className="text-center">
                   <Badge variant={statusConfig[domain.status].variant}>
-                    {statusConfig[domain.status].label}
+                    {renderStatusLabel(domain.status)}
                   </Badge>
                 </TableCell>
-                <TableCell className="text-sm text-muted-foreground">
+                <TableCell className="text-sm text-muted-foreground text-center">
                   {getTimeAgo(domain.lastCheck)}
                 </TableCell>
                 <TableCell>

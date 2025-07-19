@@ -251,8 +251,8 @@ class DomainDatabase {
     });
   }
 
-  // 获取即将到期的域名 (30天内)
-  async getExpiringDomains(days = 30) {
+  // 获取即将到期的域名 (90天内)
+  async getExpiringDomains(days = 90) {
     const thresholdDate = new Date();
     thresholdDate.setDate(thresholdDate.getDate() + days);
     
@@ -282,7 +282,7 @@ class DomainDatabase {
   // 批量更新域名状态
   async updateDomainStatuses() {
     const now = new Date();
-    const expiring30Days = new Date(now.getTime() + (30 * 24 * 60 * 60 * 1000));
+    const expiring90Days = new Date(now.getTime() + (90 * 24 * 60 * 60 * 1000));
 
     // 更新已过期的域名
     const updateExpiredSQL = `
@@ -292,7 +292,7 @@ class DomainDatabase {
       AND status NOT IN ('failed', 'unregistered')
     `;
 
-    // 更新即将到期的域名 (30天内)
+    // 更新即将到期的域名 (90天内)
     const updateExpiringSQL = `
       UPDATE domains 
       SET status = 'expiring', updatedAt = ?
@@ -313,7 +313,7 @@ class DomainDatabase {
           }
         });
 
-        this.db.run(updateExpiringSQL, [currentTime, currentTime, expiring30Days.toISOString()], function(err) {
+        this.db.run(updateExpiringSQL, [currentTime, currentTime, expiring90Days.toISOString()], function(err) {
           if (err) {
             console.error('更新即将到期域名状态失败:', err);
             reject(err);

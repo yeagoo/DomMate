@@ -15,8 +15,8 @@
     "list": "Domain List",
     "total": "Total Domains",
     "search": "Search domains or registrars...",
-    "refresh_all": "Refresh All",
-    "refreshing": "Refreshing..."
+    "recheck_all": "Recheck All",
+    "rechecking": "Rechecking..."
   },
   "import": {
     "title": "Import Domains",

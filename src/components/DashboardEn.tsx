@@ -9,7 +9,7 @@ import type { Domain, ImportResult } from '@/types/domain';
 export default function DashboardEn() {
   const [domains, setDomains] = useState<Domain[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isRechecking, setIsRechecking] = useState(false);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
 
   // 初始化加载域名数据
@@ -81,16 +81,35 @@ export default function DashboardEn() {
     }
   };
 
-  const handleRefreshAll = async () => {
-    setIsRefreshing(true);
+  const handleDeleteDomains = async (domainIds: string[]) => {
     try {
-      // 刷新所有域名数据
+      const result = await apiService.deleteDomains(domainIds);
+      
+      if (result.success) {
+        console.log(result.message);
+        
+        // 从本地状态中移除已删除的域名
+        setDomains(prev => prev.filter(domain => !domainIds.includes(domain.id)));
+      }
+    } catch (error) {
+      console.error('Failed to delete domains:', error);
+    }
+  };
+
+  const handleRecheckAll = async () => {
+    setIsRechecking(true);
+    try {
+      // 重新检查所有域名的到期时间
+      const result = await apiService.recheckAllDomains();
+      console.log(result.message);
+      
+      // 重新检查完成后，刷新域名列表获取最新数据
       const updatedDomains = await apiService.getDomains();
       setDomains(updatedDomains);
     } catch (error) {
-      console.error('Failed to refresh domains:', error);
+      console.error('Failed to recheck domains:', error);
     } finally {
-      setIsRefreshing(false);
+      setIsRechecking(false);
     }
   };
 
@@ -143,13 +162,13 @@ export default function DashboardEn() {
       <div className="flex items-center justify-between">
         <h2 className="text-3xl font-bold tracking-tight">Domain List</h2>
         <div className="flex items-center space-x-4">
-          <Button
-            variant="outline"
-            onClick={handleRefreshAll}
-            disabled={isRefreshing}
+                    <Button 
+            variant="outline" 
+            onClick={handleRecheckAll}
+            disabled={isRechecking}
           >
-            <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
-            {isRefreshing ? 'Refreshing...' : 'Refresh All'}
+            <RefreshCw className={`h-4 w-4 mr-2 ${isRechecking ? 'animate-spin' : ''}`} />
+            {isRechecking ? 'Rechecking...' : 'Recheck All'}
           </Button>
           <DomainImportDialogEn 
             onImport={handleImport}
@@ -163,6 +182,7 @@ export default function DashboardEn() {
         domains={domains}
         onToggleNotifications={handleToggleNotifications}
         onRefreshDomain={handleRefreshDomain}
+        onDeleteDomains={handleDeleteDomains}
       />
     </div>
   );

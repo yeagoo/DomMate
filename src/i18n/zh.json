@@ -15,8 +15,8 @@
     "list": "域名列表",
     "total": "总域名数",
     "search": "搜索域名或注册商...",
-    "refresh_all": "刷新全部",
-    "refreshing": "刷新中..."
+    "recheck_all": "重新检查",
+    "rechecking": "重新检查中..."
   },
   "import": {
     "title": "导入域名",

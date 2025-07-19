@@ -582,6 +582,135 @@ app.post('/api/domains/:id/refresh', async (req, res) => {
   res.json({ success: true });
 });
 
+// 重新检查所有域名的到期时间
+app.post('/api/domains/recheck-all', async (req, res) => {
+  try {
+    console.log('开始重新检查所有域名...');
+    const allDomains = await db.getAllDomains();
+    
+    if (allDomains.length === 0) {
+      return res.json({ 
+        success: true, 
+        message: '没有需要检查的域名',
+        total: 0,
+        updated: 0,
+        failed: 0
+      });
+    }
+    
+    let updatedCount = 0;
+    let failedCount = 0;
+    const now = new Date().toISOString();
+    
+    console.log(`正在检查 ${allDomains.length} 个域名...`);
+    
+    // 并行处理所有域名，但限制并发数量
+    const batchSize = 5; // 每批处理5个域名
+    const batches = [];
+    
+    for (let i = 0; i < allDomains.length; i += batchSize) {
+      batches.push(allDomains.slice(i, i + batchSize));
+    }
+    
+    for (const batch of batches) {
+      const promises = batch.map(async (domain) => {
+        try {
+          console.log(`重新检查域名: ${domain.domain}`);
+          const whoisData = await queryDomainUnified(domain.domain);
+          
+          await db.updateDomain(domain.id, {
+            registrar: whoisData.registrar || null,
+            expiresAt: whoisData.expirationDate ? whoisData.expirationDate.toISOString() : null,
+            dnsProvider: whoisData.dnsProvider || null,
+            domainStatus: whoisData.status || null,
+            status: whoisData.domainStatus,
+            lastCheck: now
+          });
+          
+          updatedCount++;
+          console.log(`✅ ${domain.domain} 检查完成`);
+        } catch (error) {
+          failedCount++;
+          console.error(`❌ ${domain.domain} 检查失败:`, error.message);
+          
+          // 更新最后检查时间，即使查询失败
+          try {
+            await db.updateDomain(domain.id, { lastCheck: now });
+          } catch (updateError) {
+            console.error(`更新最后检查时间失败:`, updateError.message);
+          }
+        }
+      });
+      
+      // 等待当前批次完成
+      await Promise.all(promises);
+      
+      // 批次之间短暂延迟，避免过度负载
+      if (batches.indexOf(batch) < batches.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+    }
+    
+    console.log(`重新检查完成: 成功 ${updatedCount} 个, 失败 ${failedCount} 个`);
+    
+    res.json({
+      success: true,
+      message: `重新检查完成: 成功 ${updatedCount} 个，失败 ${failedCount} 个`,
+      total: allDomains.length,
+      updated: updatedCount,
+      failed: failedCount
+    });
+    
+  } catch (error) {
+    console.error('批量重新检查失败:', error);
+    res.status(500).json({ error: '重新检查失败: ' + error.message });
+  }
+});
+
+// 批量删除域名
+app.delete('/api/domains', async (req, res) => {
+  try {
+    const { domainIds } = req.body;
+    
+    if (!domainIds || !Array.isArray(domainIds) || domainIds.length === 0) {
+      return res.status(400).json({ error: '域名ID列表不能为空' });
+    }
+    
+    console.log(`批量删除域名请求: ${domainIds.length} 个域名`);
+    
+    let successCount = 0;
+    let failCount = 0;
+    
+    for (const domainId of domainIds) {
+      try {
+        const domain = await db.getDomainById(domainId);
+        if (domain) {
+          await db.deleteDomain(domainId);
+          console.log(`✅ 删除域名成功: ${domain.domain}`);
+          successCount++;
+        } else {
+          console.log(`❌ 域名不存在: ${domainId}`);
+          failCount++;
+        }
+      } catch (error) {
+        console.error(`❌ 删除域名失败: ${domainId}`, error);
+        failCount++;
+      }
+    }
+    
+    res.json({
+      success: true,
+      message: `批量删除完成: 成功 ${successCount} 个，失败 ${failCount} 个`,
+      successCount,
+      failCount
+    });
+    
+  } catch (error) {
+    console.error('批量删除域名错误:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // 定时任务 - 每天凌晨 2 点执行
 cron.schedule('0 2 * * *', async () => {
   console.log('开始定时更新域名信息...');

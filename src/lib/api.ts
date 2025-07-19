@@ -53,6 +53,21 @@ class ApiService {
       method: 'POST',
     });
   }
+
+  // 批量删除域名
+  async deleteDomains(domainIds: string[]): Promise<{ success: boolean; message: string; successCount: number; failCount: number }> {
+    return this.request<{ success: boolean; message: string; successCount: number; failCount: number }>('/domains', {
+      method: 'DELETE',
+      body: JSON.stringify({ domainIds }),
+    });
+  }
+
+  // 重新检查所有域名的到期时间
+  async recheckAllDomains(): Promise<{ success: boolean; message: string; total: number; updated: number; failed: number }> {
+    return this.request<{ success: boolean; message: string; total: number; updated: number; failed: number }>('/domains/recheck-all', {
+      method: 'POST',
+    });
+  }
 }
 
 export const apiService = new ApiService(); 
