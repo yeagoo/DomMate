@@ -29,9 +29,9 @@ class DomainDatabase {
     });
   }
 
-  // 创建domains表
+  // 创建domains表和分组相关表
   async createTable() {
-    const createTableSQL = `
+    const createDomainsTableSQL = `
       CREATE TABLE IF NOT EXISTS domains (
         id TEXT PRIMARY KEY,
         domain TEXT UNIQUE NOT NULL,
@@ -47,13 +47,112 @@ class DomainDatabase {
       )
     `;
 
+    const createGroupsTableSQL = `
+      CREATE TABLE IF NOT EXISTS groups (
+        id TEXT PRIMARY KEY,
+        name TEXT UNIQUE NOT NULL,
+        description TEXT,
+        color TEXT DEFAULT '#3B82F6',
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL
+      )
+    `;
+
+    const createDomainGroupsTableSQL = `
+      CREATE TABLE IF NOT EXISTS domain_groups (
+        id TEXT PRIMARY KEY,
+        domainId TEXT NOT NULL,
+        groupId TEXT NOT NULL,
+        createdAt TEXT NOT NULL,
+        FOREIGN KEY (domainId) REFERENCES domains (id) ON DELETE CASCADE,
+        FOREIGN KEY (groupId) REFERENCES groups (id) ON DELETE CASCADE,
+        UNIQUE(domainId, groupId)
+      )
+    `;
+
     return new Promise((resolve, reject) => {
-      this.db.run(createTableSQL, (err) => {
+      // 创建domains表
+      this.db.run(createDomainsTableSQL, (err) => {
         if (err) {
-          console.error('创建表失败:', err.message);
+          console.error('创建domains表失败:', err.message);
+          reject(err);
+          return;
+        }
+        console.log('✅ domains表创建成功');
+
+        // 创建groups表
+        this.db.run(createGroupsTableSQL, (err) => {
+          if (err) {
+            console.error('创建groups表失败:', err.message);
+            reject(err);
+            return;
+          }
+          console.log('✅ groups表创建成功');
+
+          // 创建domain_groups关联表
+          this.db.run(createDomainGroupsTableSQL, (err) => {
+            if (err) {
+              console.error('创建domain_groups表失败:', err.message);
+              reject(err);
+              return;
+            }
+            console.log('✅ domain_groups表创建成功');
+            
+            // 创建默认分组
+            this.createDefaultGroups().then(resolve).catch(reject);
+          });
+        });
+      });
+    });
+  }
+
+  // 创建默认分组
+  async createDefaultGroups() {
+    const defaultGroups = [
+      {
+        id: 'default',
+        name: '默认分组',
+        description: '未分组的域名',
+        color: '#6B7280'
+      },
+      {
+        id: 'important',
+        name: '重要域名',
+        description: '核心业务域名',
+        color: '#EF4444'
+      },
+      {
+        id: 'development',
+        name: '开发测试',
+        description: '开发和测试环境域名',
+        color: '#10B981'
+      }
+    ];
+
+    for (const group of defaultGroups) {
+      await this.addGroupIfNotExists(group);
+    }
+  }
+
+  // 添加分组（如果不存在）
+  async addGroupIfNotExists(groupData) {
+    const { id, name, description, color } = groupData;
+    const now = new Date().toISOString();
+
+    const insertSQL = `
+      INSERT OR IGNORE INTO groups (id, name, description, color, createdAt, updatedAt)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `;
+
+    return new Promise((resolve, reject) => {
+      this.db.run(insertSQL, [id, name, description, color, now, now], function(err) {
+        if (err) {
+          console.error('创建默认分组失败:', err.message);
           reject(err);
         } else {
-          console.log('✅ domains表创建成功');
+          if (this.changes > 0) {
+            console.log(`✅ 默认分组"${name}"创建成功`);
+          }
           resolve();
         }
       });
@@ -246,6 +345,238 @@ class DomainDatabase {
           });
 
           resolve(stats);
+        }
+      });
+    });
+  }
+
+  // ====== 分组管理相关方法 ======
+
+  // 获取所有分组
+  async getAllGroups() {
+    const selectSQL = `
+      SELECT g.*, 
+             COUNT(dg.domainId) as domainCount
+      FROM groups g
+      LEFT JOIN domain_groups dg ON g.id = dg.groupId
+      GROUP BY g.id, g.name, g.description, g.color, g.createdAt, g.updatedAt
+      ORDER BY g.createdAt ASC
+    `;
+
+    return new Promise((resolve, reject) => {
+      this.db.all(selectSQL, [], (err, rows) => {
+        if (err) {
+          reject(err);
+        } else {
+          resolve(rows);
+        }
+      });
+    });
+  }
+
+  // 创建新分组
+  async createGroup(groupData) {
+    const { name, description, color } = groupData;
+    const id = 'group_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+    const now = new Date().toISOString();
+
+    const insertSQL = `
+      INSERT INTO groups (id, name, description, color, createdAt, updatedAt)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `;
+
+    return new Promise((resolve, reject) => {
+      this.db.run(insertSQL, [id, name, description, color, now, now], function(err) {
+        if (err) {
+          reject(err);
+        } else {
+          resolve({
+            id,
+            name,
+            description,
+            color,
+            createdAt: now,
+            updatedAt: now,
+            domainCount: 0
+          });
+        }
+      });
+    });
+  }
+
+  // 更新分组
+  async updateGroup(id, groupData) {
+    const { name, description, color } = groupData;
+    const updatedAt = new Date().toISOString();
+
+    const updateSQL = `
+      UPDATE groups 
+      SET name = ?, description = ?, color = ?, updatedAt = ?
+      WHERE id = ?
+    `;
+
+    return new Promise((resolve, reject) => {
+      this.db.run(updateSQL, [name, description, color, updatedAt, id], function(err) {
+        if (err) {
+          reject(err);
+        } else if (this.changes === 0) {
+          reject(new Error('分组不存在'));
+        } else {
+          resolve({ id, name, description, color, updatedAt });
+        }
+      });
+    });
+  }
+
+  // 删除分组
+  async deleteGroup(id) {
+    // 检查是否为默认分组
+    if (['default', 'important', 'development'].includes(id)) {
+      throw new Error('无法删除系统默认分组');
+    }
+
+    const deleteSQL = `DELETE FROM groups WHERE id = ?`;
+
+    return new Promise((resolve, reject) => {
+      this.db.run(deleteSQL, [id], function(err) {
+        if (err) {
+          reject(err);
+        } else if (this.changes === 0) {
+          reject(new Error('分组不存在'));
+        } else {
+          resolve({ success: true, deletedCount: this.changes });
+        }
+      });
+    });
+  }
+
+  // 将域名添加到分组
+  async addDomainToGroup(domainId, groupId) {
+    const id = 'dg_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+    const createdAt = new Date().toISOString();
+
+    const insertSQL = `
+      INSERT OR IGNORE INTO domain_groups (id, domainId, groupId, createdAt)
+      VALUES (?, ?, ?, ?)
+    `;
+
+    return new Promise((resolve, reject) => {
+      this.db.run(insertSQL, [id, domainId, groupId, createdAt], function(err) {
+        if (err) {
+          reject(err);
+        } else {
+          resolve({ success: true, added: this.changes > 0 });
+        }
+      });
+    });
+  }
+
+  // 从分组中移除域名
+  async removeDomainFromGroup(domainId, groupId) {
+    const deleteSQL = `
+      DELETE FROM domain_groups 
+      WHERE domainId = ? AND groupId = ?
+    `;
+
+    return new Promise((resolve, reject) => {
+      this.db.run(deleteSQL, [domainId, groupId], function(err) {
+        if (err) {
+          reject(err);
+        } else {
+          resolve({ success: true, removed: this.changes > 0 });
+        }
+      });
+    });
+  }
+
+  // 获取分组中的域名
+  async getDomainsByGroup(groupId) {
+    const selectSQL = `
+      SELECT d.*
+      FROM domains d
+      INNER JOIN domain_groups dg ON d.id = dg.domainId
+      WHERE dg.groupId = ?
+      ORDER BY d.domain ASC
+    `;
+
+    return new Promise((resolve, reject) => {
+      this.db.all(selectSQL, [groupId], (err, rows) => {
+        if (err) {
+          reject(err);
+        } else {
+          resolve(rows);
+        }
+      });
+    });
+  }
+
+  // 获取未分组的域名
+  async getUngroupedDomains() {
+    const selectSQL = `
+      SELECT d.*
+      FROM domains d
+      LEFT JOIN domain_groups dg ON d.id = dg.domainId
+      WHERE dg.domainId IS NULL
+      ORDER BY d.domain ASC
+    `;
+
+    return new Promise((resolve, reject) => {
+      this.db.all(selectSQL, [], (err, rows) => {
+        if (err) {
+          reject(err);
+        } else {
+          resolve(rows);
+        }
+      });
+    });
+  }
+
+  // 获取域名的分组信息
+  async getDomainGroups(domainId) {
+    const selectSQL = `
+      SELECT g.*
+      FROM groups g
+      INNER JOIN domain_groups dg ON g.id = dg.groupId
+      WHERE dg.domainId = ?
+      ORDER BY g.name ASC
+    `;
+
+    return new Promise((resolve, reject) => {
+      this.db.all(selectSQL, [domainId], (err, rows) => {
+        if (err) {
+          reject(err);
+        } else {
+          resolve(rows);
+        }
+      });
+    });
+  }
+
+  // 获取分组统计信息
+  async getGroupStats() {
+    const statsSQL = `
+      SELECT 
+        g.id,
+        g.name,
+        g.color,
+        COUNT(dg.domainId) as domainCount,
+        COUNT(CASE WHEN d.status = 'normal' THEN 1 END) as normalCount,
+        COUNT(CASE WHEN d.status = 'expiring' THEN 1 END) as expiringCount,
+        COUNT(CASE WHEN d.status = 'expired' THEN 1 END) as expiredCount,
+        COUNT(CASE WHEN d.status = 'failed' THEN 1 END) as failedCount
+      FROM groups g
+      LEFT JOIN domain_groups dg ON g.id = dg.groupId
+      LEFT JOIN domains d ON dg.domainId = d.id
+      GROUP BY g.id, g.name, g.color
+      ORDER BY g.name ASC
+    `;
+
+    return new Promise((resolve, reject) => {
+      this.db.all(statsSQL, [], (err, rows) => {
+        if (err) {
+          reject(err);
+        } else {
+          resolve(rows);
         }
       });
     });

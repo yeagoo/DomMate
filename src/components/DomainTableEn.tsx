@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Table,
   TableBody,
@@ -11,14 +11,18 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Search, Bell, BellOff, ArrowUpDown, AlertTriangle, CheckCircle2, Clock, XCircle, Circle, AlertCircle, Trash2 } from 'lucide-react';
+import { Search, Bell, BellOff, ArrowUpDown, AlertTriangle, CheckCircle2, Clock, XCircle, Circle, AlertCircle, Trash2, FolderPlus, Tag, Filter } from 'lucide-react';
+import { BatchGroupDialog } from './BatchGroupDialog';
+import { apiService } from '@/lib/api';
 import type { Domain } from '@/types/domain';
+import type { Group } from '@/types/group';
 
 interface DomainTableEnProps {
   domains: Domain[];
   onToggleNotifications: (domainId: string) => void;
   onRefreshDomain: (domainId: string) => void;
   onDeleteDomains?: (domainIds: string[]) => void;
+  onGroupOperationSuccess?: () => void;
 }
 
 const statusConfig = {
@@ -68,13 +72,89 @@ const translateDomainStatus = (chineseStatus: string): string => {
   return statusMap[chineseStatus] || chineseStatus;
 };
 
-export function DomainTableEn({ domains, onToggleNotifications, onRefreshDomain, onDeleteDomains }: DomainTableEnProps) {
+export function DomainTableEn({ 
+  domains, 
+  onToggleNotifications, 
+  onRefreshDomain, 
+  onDeleteDomains, 
+  onGroupOperationSuccess 
+}: DomainTableEnProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [sortField, setSortField] = useState<keyof Domain>('expiresAt');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const [selectedDomains, setSelectedDomains] = useState<Set<string>>(new Set());
+  const [batchGroupDialogOpen, setBatchGroupDialogOpen] = useState(false);
+  
+  // 分组筛选相关状态
+  const [groups, setGroups] = useState<Group[]>([]);
+  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
+  const [groupDomains, setGroupDomains] = useState<Domain[]>([]);
+  const [ungroupedDomains, setUngroupedDomains] = useState<Domain[]>([]);
+  const [loadingGroups, setLoadingGroups] = useState(false);
 
-  const filteredDomains = domains.filter(domain =>
+  // 加载分组数据
+  useEffect(() => {
+    loadGroups();
+  }, []);
+
+  // 当选择的分组改变时，加载相应的域名数据
+  useEffect(() => {
+    if (selectedGroupId === null) {
+      // 显示所有域名
+      return;
+    } else if (selectedGroupId === 'ungrouped') {
+      // 加载未分组域名
+      loadUngroupedDomains();
+    } else {
+      // 加载特定分组的域名
+      loadGroupDomains(selectedGroupId);
+    }
+  }, [selectedGroupId]);
+
+  const loadGroups = async () => {
+    setLoadingGroups(true);
+    try {
+      const groupsData = await apiService.getGroups();
+      setGroups(groupsData);
+    } catch (error) {
+      console.error('Failed to load groups:', error);
+    } finally {
+      setLoadingGroups(false);
+    }
+  };
+
+  const loadGroupDomains = async (groupId: string) => {
+    try {
+      const domainsData = await apiService.getGroupDomains(groupId);
+      setGroupDomains(domainsData);
+    } catch (error) {
+      console.error('Failed to load group domains:', error);
+    }
+  };
+
+  const loadUngroupedDomains = async () => {
+    try {
+      const domainsData = await apiService.getUngroupedDomains();
+      setUngroupedDomains(domainsData);
+    } catch (error) {
+      console.error('Failed to load ungrouped domains:', error);
+    }
+  };
+
+  // 获取当前要显示的域名列表
+  const getDisplayDomains = () => {
+    if (selectedGroupId === null) {
+      return domains; // 显示所有域名
+    } else if (selectedGroupId === 'ungrouped') {
+      return ungroupedDomains; // 显示未分组域名
+    } else {
+      return groupDomains; // 显示特定分组的域名
+    }
+  };
+
+  const displayDomains = getDisplayDomains();
+
+  const filteredDomains = displayDomains.filter(domain =>
     domain.domain.toLowerCase().includes(searchTerm.toLowerCase()) ||
     domain.registrar?.toLowerCase().includes(searchTerm.toLowerCase())
   );
@@ -126,6 +206,37 @@ export function DomainTableEn({ domains, onToggleNotifications, onRefreshDomain,
       setSelectedDomains(new Set());
     }
   };
+
+  const handleBatchGroupSuccess = () => {
+    setSelectedDomains(new Set());
+    setBatchGroupDialogOpen(false);
+    onGroupOperationSuccess?.();
+    // 重新加载当前视图的域名数据
+    if (selectedGroupId === 'ungrouped') {
+      loadUngroupedDomains();
+    } else if (selectedGroupId !== null) {
+      loadGroupDomains(selectedGroupId);
+    }
+  };
+
+  const handleGroupFilterChange = (groupId: string | null) => {
+    setSelectedGroupId(groupId);
+    setSelectedDomains(new Set()); // 清空选择
+  };
+
+  // 获取当前选择的分组信息
+  const getCurrentGroupInfo = () => {
+    if (selectedGroupId === null) {
+      return { name: 'All Domains', color: '#6B7280' };
+    } else if (selectedGroupId === 'ungrouped') {
+      return { name: 'Ungrouped', color: '#6B7280' };
+    } else {
+      const group = groups.find(g => g.id === selectedGroupId);
+      return group ? { name: group.name, color: group.color } : { name: 'Unknown Group', color: '#6B7280' };
+    }
+  };
+
+  const currentGroupInfo = getCurrentGroupInfo();
 
   const isAllSelected = sortedDomains.length > 0 && selectedDomains.size === sortedDomains.length;
   const isIndeterminate = selectedDomains.size > 0 && selectedDomains.size < sortedDomains.length;
@@ -194,6 +305,83 @@ export function DomainTableEn({ domains, onToggleNotifications, onRefreshDomain,
 
   return (
     <div className="space-y-4">
+      {/* Group Filter Tags */}
+      <div className="flex flex-wrap gap-2 p-4 bg-gray-50 dark:bg-gray-900 rounded-lg">
+        <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+          <Filter className="h-4 w-4" />
+          <span>Filter by Group:</span>
+        </div>
+        
+        {/* All Domains Tag */}
+        <Button
+          variant={selectedGroupId === null ? 'default' : 'outline'}
+          size="sm"
+          onClick={() => handleGroupFilterChange(null)}
+          className="flex items-center gap-1 h-8"
+        >
+          <Tag className="h-3 w-3" />
+          All Groups ({domains.length})
+        </Button>
+
+        {/* Ungrouped Tag */}
+        <Button
+          variant={selectedGroupId === 'ungrouped' ? 'default' : 'outline'}
+          size="sm"
+          onClick={() => handleGroupFilterChange('ungrouped')}
+          className="flex items-center gap-1 h-8"
+          disabled={loadingGroups}
+        >
+          <Tag className="h-3 w-3" />
+          Ungrouped ({ungroupedDomains.length})
+        </Button>
+
+        {/* Group Tags */}
+        {groups.map((group) => (
+          <Button
+            key={group.id}
+            variant={selectedGroupId === group.id ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => handleGroupFilterChange(group.id)}
+            className="flex items-center gap-1 h-8 relative"
+            style={{
+              backgroundColor: selectedGroupId === group.id ? group.color : undefined,
+              borderColor: group.color,
+            }}
+            disabled={loadingGroups}
+          >
+            <div
+              className="w-2 h-2 rounded-full"
+              style={{ backgroundColor: group.color }}
+            />
+            {group.name} ({group.domainCount || 0})
+          </Button>
+        ))}
+      </div>
+
+      {/* Current Filter Status */}
+      {selectedGroupId !== null && (
+        <div className="flex items-center gap-2 px-4 py-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+          <div className="flex items-center gap-2">
+            <Tag className="h-4 w-4 text-blue-600" />
+            <span className="text-sm text-blue-600 dark:text-blue-400">
+              Showing: 
+            </span>
+            <div className="flex items-center gap-1">
+              <div
+                className="w-2 h-2 rounded-full"
+                style={{ backgroundColor: currentGroupInfo.color }}
+              />
+              <span className="font-medium text-blue-700 dark:text-blue-300">
+                {currentGroupInfo.name}
+              </span>
+              <span className="text-sm text-blue-600 dark:text-blue-400">
+                ({filteredDomains.length} domains)
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center space-x-2">
         <div className="relative flex-1">
           <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -205,14 +393,26 @@ export function DomainTableEn({ domains, onToggleNotifications, onRefreshDomain,
           />
         </div>
         {selectedDomains.size > 0 && (
-          <Button
-            variant="destructive"
-            onClick={handleDeleteSelected}
-            className="flex items-center gap-2"
-          >
-            <Trash2 className="h-4 w-4" />
-            Delete Selected ({selectedDomains.size})
-          </Button>
+          <div className="flex items-center space-x-2">
+            <Button
+              variant="outline"
+              onClick={() => setBatchGroupDialogOpen(true)}
+              className="flex items-center gap-2"
+            >
+              <FolderPlus className="h-4 w-4" />
+              Group Operations ({selectedDomains.size})
+            </Button>
+            {onDeleteDomains && (
+              <Button
+                variant="destructive"
+                onClick={handleDeleteSelected}
+                className="flex items-center gap-2"
+              >
+                <Trash2 className="h-4 w-4" />
+                Delete Selected ({selectedDomains.size})
+              </Button>
+            )}
+          </div>
         )}
       </div>
 
@@ -228,22 +428,30 @@ export function DomainTableEn({ domains, onToggleNotifications, onRefreshDomain,
                 />
               </TableHead>
               <TableHead 
-                className="cursor-pointer hover:bg-muted/50 text-center"
+                className="text-center cursor-pointer hover:bg-muted/50"
                 onClick={() => handleSort('domain')}
               >
-                <div className="flex items-center justify-center">
+                <div className="flex items-center justify-center gap-1">
                   Domain
-                  <ArrowUpDown className="ml-2 h-4 w-4" />
+                  <ArrowUpDown className="h-4 w-4 opacity-50" />
                 </div>
               </TableHead>
-              <TableHead className="text-center">Registrar</TableHead>
               <TableHead 
-                className="cursor-pointer hover:bg-muted/50 text-center min-w-[120px]"
+                className="text-center cursor-pointer hover:bg-muted/50"
+                onClick={() => handleSort('registrar')}
+              >
+                <div className="flex items-center justify-center gap-1">
+                  Registrar
+                  <ArrowUpDown className="h-4 w-4 opacity-50" />
+                </div>
+              </TableHead>
+              <TableHead 
+                className="text-center cursor-pointer hover:bg-muted/50"
                 onClick={() => handleSort('expiresAt')}
               >
-                <div className="flex items-center justify-center">
-                  <span className="whitespace-nowrap">Expires At</span>
-                  <ArrowUpDown className="ml-2 h-4 w-4" />
+                <div className="flex items-center justify-center gap-1">
+                  Expires At
+                  <ArrowUpDown className="h-4 w-4 opacity-50" />
                 </div>
               </TableHead>
               <TableHead className="text-center">DNS Provider</TableHead>
@@ -314,6 +522,16 @@ export function DomainTableEn({ domains, onToggleNotifications, onRefreshDomain,
           {searchTerm ? 'No matching domains found' : 'No domain data'}
         </div>
       )}
+
+      {/* Batch Group Operations Dialog */}
+      <BatchGroupDialog
+        open={batchGroupDialogOpen}
+        onClose={() => setBatchGroupDialogOpen(false)}
+        selectedDomains={Array.from(selectedDomains)}
+        domains={domains}
+        onSuccess={handleBatchGroupSuccess}
+        language="en"
+      />
     </div>
   );
 } 

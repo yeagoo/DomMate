@@ -82,6 +82,78 @@ class ApiService {
       body: JSON.stringify(exportOptions),
     });
   }
+
+  // ====== 分组管理相关API ======
+
+  // 获取所有分组
+  async getGroups(): Promise<import('@/types/group').Group[]> {
+    return this.request<import('@/types/group').Group[]>('/groups');
+  }
+
+  // 创建新分组
+  async createGroup(groupData: import('@/types/group').CreateGroupData): Promise<import('@/types/group').Group> {
+    return this.request<import('@/types/group').Group>('/groups', {
+      method: 'POST',
+      body: JSON.stringify(groupData),
+    });
+  }
+
+  // 更新分组
+  async updateGroup(id: string, groupData: import('@/types/group').UpdateGroupData): Promise<import('@/types/group').Group> {
+    return this.request<import('@/types/group').Group>(`/groups/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(groupData),
+    });
+  }
+
+  // 删除分组
+  async deleteGroup(id: string): Promise<{ success: boolean; deletedCount: number }> {
+    return this.request<{ success: boolean; deletedCount: number }>(`/groups/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // 获取分组中的域名
+  async getGroupDomains(groupId: string): Promise<Domain[]> {
+    return this.request<Domain[]>(`/groups/${groupId}/domains`);
+  }
+
+  // 获取未分组的域名
+  async getUngroupedDomains(): Promise<Domain[]> {
+    return this.request<Domain[]>('/groups/ungrouped/domains');
+  }
+
+  // 将域名添加到分组
+  async addDomainToGroup(domainId: string, groupId: string): Promise<import('@/types/group').GroupDomainActionResult> {
+    return this.request<import('@/types/group').GroupDomainActionResult>(`/groups/${groupId}/domains/${domainId}`, {
+      method: 'POST',
+    });
+  }
+
+  // 从分组中移除域名
+  async removeDomainFromGroup(domainId: string, groupId: string): Promise<import('@/types/group').GroupDomainActionResult> {
+    return this.request<import('@/types/group').GroupDomainActionResult>(`/groups/${groupId}/domains/${domainId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // 获取域名的分组信息
+  async getDomainGroups(domainId: string): Promise<import('@/types/group').Group[]> {
+    return this.request<import('@/types/group').Group[]>(`/domains/${domainId}/groups`);
+  }
+
+  // 获取分组统计信息
+  async getGroupStats(): Promise<import('@/types/group').GroupStats[]> {
+    return this.request<import('@/types/group').GroupStats[]>('/groups/stats');
+  }
+
+  // 按分组导出数据
+  async exportGroupData(groupId: string, exportOptions: import('@/types/group').GroupExportData): Promise<{ success: boolean; message: string; file: any }> {
+    return this.request<{ success: boolean; message: string; file: any }>(`/groups/${groupId}/export`, {
+      method: 'POST',
+      body: JSON.stringify(exportOptions),
+    });
+  }
 }
 
 export const apiService = new ApiService(); 

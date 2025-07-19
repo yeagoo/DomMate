@@ -944,6 +944,274 @@ app.post('/api/export/schedule/validate-cron', (req, res) => {
   }
 });
 
+// ====== 分组管理API ======
+
+// 获取所有分组
+app.get('/api/groups', async (req, res) => {
+  try {
+    const groups = await db.getAllGroups();
+    res.json(groups);
+  } catch (error) {
+    console.error('获取分组失败:', error);
+    res.status(500).json({ error: '获取分组失败: ' + error.message });
+  }
+});
+
+// 创建新分组
+app.post('/api/groups', async (req, res) => {
+  try {
+    const { name, description, color } = req.body;
+    
+    if (!name || typeof name !== 'string' || name.trim().length === 0) {
+      return res.status(400).json({ error: '分组名称不能为空' });
+    }
+    
+    const groupData = {
+      name: name.trim(),
+      description: description || '',
+      color: color || '#3B82F6'
+    };
+    
+    const newGroup = await db.createGroup(groupData);
+    res.status(201).json(newGroup);
+  } catch (error) {
+    console.error('创建分组失败:', error);
+    if (error.message.includes('UNIQUE constraint')) {
+      res.status(400).json({ error: '分组名称已存在' });
+    } else {
+      res.status(500).json({ error: '创建分组失败: ' + error.message });
+    }
+  }
+});
+
+// 更新分组
+app.put('/api/groups/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, description, color } = req.body;
+    
+    if (!name || typeof name !== 'string' || name.trim().length === 0) {
+      return res.status(400).json({ error: '分组名称不能为空' });
+    }
+    
+    const groupData = {
+      name: name.trim(),
+      description: description || '',
+      color: color || '#3B82F6'
+    };
+    
+    const updatedGroup = await db.updateGroup(id, groupData);
+    res.json(updatedGroup);
+  } catch (error) {
+    console.error('更新分组失败:', error);
+    if (error.message === '分组不存在') {
+      res.status(404).json({ error: '分组不存在' });
+    } else if (error.message.includes('UNIQUE constraint')) {
+      res.status(400).json({ error: '分组名称已存在' });
+    } else {
+      res.status(500).json({ error: '更新分组失败: ' + error.message });
+    }
+  }
+});
+
+// 删除分组
+app.delete('/api/groups/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await db.deleteGroup(id);
+    res.json(result);
+  } catch (error) {
+    console.error('删除分组失败:', error);
+    if (error.message === '分组不存在') {
+      res.status(404).json({ error: '分组不存在' });
+    } else if (error.message.includes('无法删除系统默认分组')) {
+      res.status(400).json({ error: '无法删除系统默认分组' });
+    } else {
+      res.status(500).json({ error: '删除分组失败: ' + error.message });
+    }
+  }
+});
+
+// 获取分组中的域名
+app.get('/api/groups/:id/domains', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const domains = await db.getDomainsByGroup(id);
+    
+    const formatted = domains.map(domain => ({
+      id: domain.id,
+      domain: domain.domain,
+      registrar: domain.registrar,
+      expiresAt: domain.expiresAt ? new Date(domain.expiresAt) : null,
+      dnsProvider: domain.dnsProvider,
+      domainStatus: domain.domainStatus,
+      status: domain.status,
+      lastCheck: domain.lastCheck ? new Date(domain.lastCheck) : null,
+      notifications: Boolean(domain.notifications),
+      createdAt: new Date(domain.createdAt),
+      updatedAt: new Date(domain.updatedAt)
+    }));
+    
+    res.json(formatted);
+  } catch (error) {
+    console.error('获取分组域名失败:', error);
+    res.status(500).json({ error: '获取分组域名失败: ' + error.message });
+  }
+});
+
+// 获取未分组的域名
+app.get('/api/groups/ungrouped/domains', async (req, res) => {
+  try {
+    const domains = await db.getUngroupedDomains();
+    
+    const formatted = domains.map(domain => ({
+      id: domain.id,
+      domain: domain.domain,
+      registrar: domain.registrar,
+      expiresAt: domain.expiresAt ? new Date(domain.expiresAt) : null,
+      dnsProvider: domain.dnsProvider,
+      domainStatus: domain.domainStatus,
+      status: domain.status,
+      lastCheck: domain.lastCheck ? new Date(domain.lastCheck) : null,
+      notifications: Boolean(domain.notifications),
+      createdAt: new Date(domain.createdAt),
+      updatedAt: new Date(domain.updatedAt)
+    }));
+    
+    res.json(formatted);
+  } catch (error) {
+    console.error('获取未分组域名失败:', error);
+    res.status(500).json({ error: '获取未分组域名失败: ' + error.message });
+  }
+});
+
+// 将域名添加到分组
+app.post('/api/groups/:groupId/domains/:domainId', async (req, res) => {
+  try {
+    const { groupId, domainId } = req.params;
+    const result = await db.addDomainToGroup(domainId, groupId);
+    res.json(result);
+  } catch (error) {
+    console.error('添加域名到分组失败:', error);
+    res.status(500).json({ error: '添加域名到分组失败: ' + error.message });
+  }
+});
+
+// 从分组中移除域名
+app.delete('/api/groups/:groupId/domains/:domainId', async (req, res) => {
+  try {
+    const { groupId, domainId } = req.params;
+    const result = await db.removeDomainFromGroup(domainId, groupId);
+    res.json(result);
+  } catch (error) {
+    console.error('从分组移除域名失败:', error);
+    res.status(500).json({ error: '从分组移除域名失败: ' + error.message });
+  }
+});
+
+// 获取域名的分组信息
+app.get('/api/domains/:id/groups', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const groups = await db.getDomainGroups(id);
+    res.json(groups);
+  } catch (error) {
+    console.error('获取域名分组信息失败:', error);
+    res.status(500).json({ error: '获取域名分组信息失败: ' + error.message });
+  }
+});
+
+// 获取分组统计信息
+app.get('/api/groups/stats', async (req, res) => {
+  try {
+    const stats = await db.getGroupStats();
+    res.json(stats);
+  } catch (error) {
+    console.error('获取分组统计失败:', error);
+    res.status(500).json({ error: '获取分组统计失败: ' + error.message });
+  }
+});
+
+// 按分组导出数据
+app.post('/api/groups/:id/export', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { 
+      format = 'csv', 
+      selectedFields = [], 
+      filename,
+      language = 'zh',
+      options = {}
+    } = req.body;
+    
+    // 验证参数
+    if (!['csv', 'pdf', 'json'].includes(format)) {
+      return res.status(400).json({ error: '不支持的导出格式' });
+    }
+    
+    if (!Array.isArray(selectedFields) || selectedFields.length === 0) {
+      return res.status(400).json({ error: '请选择要导出的字段' });
+    }
+    
+    // 获取分组信息
+    const groups = await db.getAllGroups();
+    const group = groups.find(g => g.id === id);
+    if (!group) {
+      return res.status(404).json({ error: '分组不存在' });
+    }
+    
+    // 获取分组中的域名数据
+    let domains;
+    if (id === 'ungrouped') {
+      domains = await db.getUngroupedDomains();
+    } else {
+      domains = await db.getDomainsByGroup(id);
+    }
+    
+    if (domains.length === 0) {
+      return res.status(400).json({ error: '该分组没有可导出的域名数据' });
+    }
+    
+    const exportFilename = filename || `${group.name}_domains`;
+    
+    console.log(`开始按分组导出数据: 分组=${group.name}, 格式=${format}, 字段=${selectedFields.length}个, 域名=${domains.length}个`);
+    
+    let result;
+    
+    switch (format) {
+      case 'csv':
+        result = await exportService.exportToCSV(domains, selectedFields, { filename: exportFilename, language, ...options });
+        break;
+      case 'pdf':
+        const title = language === 'en' ? `${group.name} Domain Report` : `${group.name} 域名报告`;
+        result = await exportService.exportToPDF(domains, selectedFields, { filename: exportFilename, language, title, ...options });
+        break;
+      case 'json':
+        result = await exportService.exportToJSON(domains, selectedFields, { filename: exportFilename, language, ...options });
+        break;
+    }
+    
+    console.log(`分组导出完成: ${result.filename} (${result.size} bytes)`);
+    
+    res.json({
+      success: true,
+      message: `${group.name} 分组导出成功`,
+      file: {
+        filename: result.filename,
+        size: result.size,
+        format: format,
+        totalRecords: domains.length,
+        selectedFields: selectedFields.length,
+        groupName: group.name
+      }
+    });
+    
+  } catch (error) {
+    console.error('分组数据导出失败:', error);
+    res.status(500).json({ error: '导出失败: ' + error.message });
+  }
+});
+
 // 文件大小格式化辅助函数
 function formatFileSize(bytes) {
   if (bytes === 0) return '0 Bytes';

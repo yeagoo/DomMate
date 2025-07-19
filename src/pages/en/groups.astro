@@ -1,0 +1,24 @@
+---
+import LayoutEn from '../../layouts/LayoutEn.astro';
+import { GroupManagement } from '../../components/GroupManagement.tsx';
+import { ThemeToggle } from '../../components/ThemeToggle.tsx';
+---
+
+<LayoutEn title="Group Management - DomainFlow">
+  <div class="space-y-6">
+    <GroupManagement client:load language="en" />
+  </div>
+</LayoutEn>
+
+<script>
+  import { createElement } from 'react';
+  import { createRoot } from 'react-dom/client';
+  import { ThemeToggle } from '../../components/ThemeToggle.tsx';
+
+  // 渲染主题切换器
+  const themeToggleContainer = document.getElementById('theme-toggle-en');
+  if (themeToggleContainer) {
+    const root = createRoot(themeToggleContainer);
+    root.render(createElement(ThemeToggle));
+  }
+</script> 

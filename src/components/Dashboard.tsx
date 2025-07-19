@@ -44,7 +44,7 @@ export default function Dashboard() {
       console.error('Failed to import domains:', error);
       return {
         success: [],
-        errors: [`导入失败: ${error instanceof Error ? error.message : '未知错误'}`],
+        errors: [`Import failed: ${error instanceof Error ? error.message : 'Unknown error'}`],
         total: domainNames.length
       };
     } finally {
@@ -53,17 +53,15 @@ export default function Dashboard() {
   };
 
   const handleToggleNotifications = async (domainId: string) => {
-    const domain = domains.find(d => d.id === domainId);
-    if (!domain) return;
-
     try {
+      const domain = domains.find(d => d.id === domainId);
+      if (!domain) return;
+
       await apiService.toggleNotifications(domainId, !domain.notifications);
       
       // 更新本地状态
       setDomains(prev => prev.map(d => 
-        d.id === domainId 
-          ? { ...d, notifications: !d.notifications }
-          : d
+        d.id === domainId ? { ...d, notifications: !d.notifications } : d
       ));
     } catch (error) {
       console.error('Failed to toggle notifications:', error);
@@ -74,7 +72,7 @@ export default function Dashboard() {
     try {
       await apiService.refreshDomain(domainId);
       
-      // 刷新域名列表以获取最新数据
+      // 刷新整个列表以获取最新数据
       const updatedDomains = await apiService.getDomains();
       setDomains(updatedDomains);
     } catch (error) {
@@ -84,14 +82,11 @@ export default function Dashboard() {
 
   const handleDeleteDomains = async (domainIds: string[]) => {
     try {
-      const result = await apiService.deleteDomains(domainIds);
+      await apiService.deleteDomains(domainIds);
       
-      if (result.success) {
-        console.log(result.message);
-        
-        // 从本地状态中移除已删除的域名
-        setDomains(prev => prev.filter(domain => !domainIds.includes(domain.id)));
-      }
+      // 刷新整个列表
+      const updatedDomains = await apiService.getDomains();
+      setDomains(updatedDomains);
     } catch (error) {
       console.error('Failed to delete domains:', error);
     }
@@ -100,27 +95,36 @@ export default function Dashboard() {
   const handleRecheckAll = async () => {
     setIsRechecking(true);
     try {
-      // 重新检查所有域名的到期时间
-      const result = await apiService.recheckAllDomains();
-      console.log(result.message);
+      await apiService.recheckAllDomains();
       
-      // 重新检查完成后，刷新域名列表获取最新数据
+      // 刷新域名列表以获取最新数据
       const updatedDomains = await apiService.getDomains();
       setDomains(updatedDomains);
     } catch (error) {
-      console.error('Failed to recheck domains:', error);
+      console.error('Failed to recheck all domains:', error);
     } finally {
       setIsRechecking(false);
     }
   };
 
-  const stats = {
-    total: domains.length,
-    normal: domains.filter(d => d.status === 'normal').length,
-    expiring: domains.filter(d => d.status === 'expiring').length,
-    expired: domains.filter(d => d.status === 'expired').length,
-    failed: domains.filter(d => d.status === 'failed').length,
+  const handleRefreshData = async () => {
+    try {
+      const updatedDomains = await apiService.getDomains();
+      setDomains(updatedDomains);
+    } catch (error) {
+      console.error('Failed to refresh data:', error);
+    }
   };
+
+  // 计算统计数据
+  const stats = domains.reduce((acc, domain) => {
+    acc.total += 1;
+    if (domain.status === 'normal') acc.normal += 1;
+    else if (domain.status === 'expiring') acc.expiring += 1;
+    else if (domain.status === 'expired') acc.expired += 1;
+    else if (domain.status === 'failed') acc.failed += 1;
+    return acc;
+  }, { total: 0, normal: 0, expiring: 0, expired: 0, failed: 0 });
 
   if (isInitialLoading) {
     return (
@@ -135,6 +139,36 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
+      {/* 页面标题和操作按钮 */}
+      <div className="flex items-center justify-between border-b border-gray-200 pb-4">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">域名列表</h1>
+          <p className="text-muted-foreground mt-2">管理和监控您的域名到期时间</p>
+        </div>
+        
+        {/* 操作按钮 */}
+        <div className="flex items-center space-x-4">
+          <Button 
+            variant="outline" 
+            onClick={handleRecheckAll}
+            disabled={isRechecking}
+          >
+            <RefreshCw className={`h-4 w-4 mr-2 ${isRechecking ? 'animate-spin' : ''}`} />
+            {isRechecking ? '重新检查中...' : '重新检查'}
+          </Button>
+          <DataExportDialog 
+            language="zh"
+            onExportComplete={(result) => {
+              console.log('导出完成:', result);
+            }}
+          />
+          <DomainImportDialog 
+            onImport={handleImport}
+            isLoading={isLoading}
+          />
+        </div>
+      </div>
+
       {/* 统计卡片 */}
       <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
         <div className="bg-card p-4 rounded-lg border">
@@ -159,38 +193,17 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* 操作栏 */}
-      <div className="flex items-center justify-between">
-        <h2 className="text-3xl font-bold tracking-tight">域名列表</h2>
-                <div className="flex items-center space-x-4">
-          <Button 
-            variant="outline" 
-            onClick={handleRecheckAll}
-            disabled={isRechecking}
-          >
-            <RefreshCw className={`h-4 w-4 mr-2 ${isRechecking ? 'animate-spin' : ''}`} />
-            {isRechecking ? '重新检查中...' : '重新检查'}
-          </Button>
-          <DataExportDialog 
-            language="zh"
-            onExportComplete={(result) => {
-              console.log('导出完成:', result);
-            }}
-          />
-          <DomainImportDialog 
-            onImport={handleImport}
-            isLoading={isLoading}
-          />
-        </div>
-      </div>
-
       {/* 域名表格 */}
-      <DomainTable
-        domains={domains}
-        onToggleNotifications={handleToggleNotifications}
-        onRefreshDomain={handleRefreshDomain}
-        onDeleteDomains={handleDeleteDomains}
-      />
+      <div>
+        <DomainTable
+          domains={domains}
+          onToggleNotifications={handleToggleNotifications}
+          onRefreshDomain={handleRefreshDomain}
+          onDeleteDomains={handleDeleteDomains}
+          onGroupOperationSuccess={handleRefreshData}
+          language="zh"
+        />
+      </div>
     </div>
   );
 } 

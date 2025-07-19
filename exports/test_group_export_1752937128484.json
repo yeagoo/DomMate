@@ -1,0 +1,23 @@
+{
+  "metadata": {
+    "exportDate": "2025-07-19T14:58:48.484Z",
+    "exportedBy": "DomainFlow",
+    "totalRecords": 1,
+    "selectedFields": [
+      "domain",
+      "status",
+      "registrar",
+      "expiresAt"
+    ],
+    "language": "zh",
+    "version": "1.0"
+  },
+  "domains": [
+    {
+      "domain": "upload.fan",
+      "status": "normal",
+      "registrar": "DNSPod, Inc.",
+      "expiresAt": "2025-08-31T22:47:14.000Z"
+    }
+  ]
+}

@@ -25,6 +25,17 @@ const { title = 'DomainFlow', description = '域名到期监控平台' } = Astro
               <h1 class="text-2xl font-bold text-primary">DomainFlow</h1>
               <span class="text-sm text-muted-foreground">域名监控平台</span>
             </div>
+            
+            <!-- 导航菜单 -->
+            <nav class="hidden md:flex items-center space-x-6">
+              <a href="/" class="text-sm hover:text-primary transition-colors font-medium">
+                🏠 域名列表
+              </a>
+              <a href="/groups" class="text-sm hover:text-primary transition-colors font-medium">
+                📁 分组管理
+              </a>
+            </nav>
+            
             <div class="flex items-center space-x-4">
               <!-- 主题切换器 -->
               <div id="theme-toggle"></div>
