@@ -3,10 +3,14 @@ import cors from 'cors';
 import whois from 'whois';
 import cron from 'node-cron';
 import fs from 'fs/promises';
+import fsSync from 'fs';
+import path from 'path';
 import { promisify } from 'util';
 import { API_CONFIG, getQueryStrategy, isApiEnabled } from './config.js';
 import { queryViewDNS, queryIP2WHOIS } from './thirdPartyApis.js';
 import db from './database.js';
+import exportService from './exportService.js';
+import scheduledExportService from './scheduledExport.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -710,6 +714,246 @@ app.delete('/api/domains', async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
+// 获取可用导出字段
+app.get('/api/export/fields', (req, res) => {
+  const language = req.query.language || 'zh';
+  const fields = exportService.getAvailableFields(language);
+  res.json({ fields });
+});
+
+// 数据导出API
+app.post('/api/export', async (req, res) => {
+  try {
+    const { 
+      format = 'csv', 
+      selectedFields = [], 
+      filename = 'domains',
+      language = 'zh',
+      options = {}
+    } = req.body;
+    
+    // 验证参数
+    if (!['csv', 'pdf', 'json'].includes(format)) {
+      return res.status(400).json({ error: '不支持的导出格式' });
+    }
+    
+    if (!Array.isArray(selectedFields) || selectedFields.length === 0) {
+      return res.status(400).json({ error: '请选择要导出的字段' });
+    }
+    
+    // 获取所有域名数据
+    const domains = await db.getAllDomains();
+    
+    if (domains.length === 0) {
+      return res.status(400).json({ error: '没有可导出的数据' });
+    }
+    
+    console.log(`开始导出数据: 格式=${format}, 字段=${selectedFields.length}个, 域名=${domains.length}个`);
+    
+    let result;
+    
+    switch (format) {
+      case 'csv':
+        result = await exportService.exportToCSV(domains, selectedFields, { filename, language, ...options });
+        break;
+      case 'pdf':
+        const title = language === 'en' ? 'Domain Monitoring Report' : '域名监控报告';
+        result = await exportService.exportToPDF(domains, selectedFields, { filename, language, title, ...options });
+        break;
+      case 'json':
+        result = await exportService.exportToJSON(domains, selectedFields, { filename, language, ...options });
+        break;
+    }
+    
+    console.log(`导出完成: ${result.filename} (${result.size} bytes)`);
+    
+    res.json({
+      success: true,
+      message: '导出成功',
+      file: {
+        filename: result.filename,
+        size: result.size,
+        format: format,
+        totalRecords: domains.length,
+        selectedFields: selectedFields.length
+      }
+    });
+    
+  } catch (error) {
+    console.error('数据导出失败:', error);
+    res.status(500).json({ error: '导出失败: ' + error.message });
+  }
+});
+
+// 下载导出文件
+app.get('/api/export/download/:filename', (req, res) => {
+  try {
+    const filename = req.params.filename;
+    const filePath = path.join(process.cwd(), 'exports', filename);
+    
+    // 安全检查：确保文件存在且在exports目录内
+    if (!fsSync.existsSync(filePath) || !filePath.startsWith(path.join(process.cwd(), 'exports'))) {
+      return res.status(404).json({ error: '文件不存在' });
+    }
+    
+    // 设置下载响应头
+    const extension = path.extname(filename);
+    let mimeType = 'application/octet-stream';
+    
+    switch (extension) {
+      case '.csv':
+        mimeType = 'text/csv; charset=utf-8';
+        break;
+      case '.pdf':
+        mimeType = 'application/pdf';
+        break;
+      case '.json':
+        mimeType = 'application/json';
+        break;
+    }
+    
+    res.setHeader('Content-Type', mimeType);
+    res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(filename)}"`);
+    res.setHeader('Cache-Control', 'no-cache');
+    
+    const fileStream = fsSync.createReadStream(filePath);
+    fileStream.pipe(res);
+    
+    fileStream.on('error', (error) => {
+      console.error('文件下载错误:', error);
+      if (!res.headersSent) {
+        res.status(500).json({ error: '文件下载失败' });
+      }
+    });
+    
+    fileStream.on('end', () => {
+      console.log(`文件下载完成: ${filename}`);
+    });
+    
+  } catch (error) {
+    console.error('下载请求处理失败:', error);
+    res.status(500).json({ error: '下载失败: ' + error.message });
+  }
+});
+
+// 获取导出历史记录
+app.get('/api/export/history', async (req, res) => {
+  try {
+    const exportPath = path.join(process.cwd(), 'exports');
+    
+    if (!fsSync.existsSync(exportPath)) {
+      return res.json({ files: [] });
+    }
+    
+    const files = fsSync.readdirSync(exportPath);
+    const fileInfo = files.map(filename => {
+      const filePath = path.join(exportPath, filename);
+      const stats = fsSync.statSync(filePath);
+      const extension = path.extname(filename);
+      
+      return {
+        filename,
+        size: stats.size,
+        createdAt: stats.mtime.toISOString(),
+        format: extension.slice(1), // 去掉点号
+        humanSize: formatFileSize(stats.size)
+      };
+    }).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)); // 按时间倒序
+    
+    res.json({ files: fileInfo });
+    
+  } catch (error) {
+    console.error('获取导出历史失败:', error);
+    res.status(500).json({ error: '获取历史记录失败: ' + error.message });
+  }
+});
+
+// 清理旧的导出文件
+app.post('/api/export/cleanup', async (req, res) => {
+  try {
+    exportService.cleanupOldExports();
+    res.json({ success: true, message: '清理完成' });
+  } catch (error) {
+    console.error('清理导出文件失败:', error);
+    res.status(500).json({ error: '清理失败: ' + error.message });
+  }
+});
+
+// 获取定期导出配置
+app.get('/api/export/schedule', (req, res) => {
+  try {
+    const status = scheduledExportService.getStatus();
+    res.json(status);
+  } catch (error) {
+    console.error('获取定期导出配置失败:', error);
+    res.status(500).json({ error: '获取配置失败: ' + error.message });
+  }
+});
+
+// 更新定期导出配置
+app.post('/api/export/schedule', (req, res) => {
+  try {
+    const result = scheduledExportService.updateConfig(req.body);
+    if (result.success) {
+      res.json(result);
+    } else {
+      res.status(400).json(result);
+    }
+  } catch (error) {
+    console.error('更新定期导出配置失败:', error);
+    res.status(500).json({ error: '更新配置失败: ' + error.message });
+  }
+});
+
+// 手动触发定期导出
+app.post('/api/export/schedule/trigger', async (req, res) => {
+  try {
+    await scheduledExportService.triggerManualExport();
+    res.json({ success: true, message: '手动导出已触发' });
+  } catch (error) {
+    console.error('手动触发导出失败:', error);
+    res.status(500).json({ error: '触发失败: ' + error.message });
+  }
+});
+
+// 获取导出历史记录（包括定期导出）
+app.get('/api/export/history/scheduled', (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit) || 10;
+    const history = scheduledExportService.getExportHistory(limit);
+    res.json({ history });
+  } catch (error) {
+    console.error('获取定期导出历史失败:', error);
+    res.status(500).json({ error: '获取历史失败: ' + error.message });
+  }
+});
+
+// 验证cron表达式
+app.post('/api/export/schedule/validate-cron', (req, res) => {
+  try {
+    const { expression } = req.body;
+    if (!expression) {
+      return res.status(400).json({ error: 'Cron表达式不能为空' });
+    }
+    
+    const isValid = scheduledExportService.validateCronExpression(expression);
+    res.json({ valid: isValid });
+  } catch (error) {
+    res.json({ valid: false, error: error.message });
+  }
+});
+
+// 文件大小格式化辅助函数
+function formatFileSize(bytes) {
+  if (bytes === 0) return '0 Bytes';
+  
+  const k = 1024;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
 
 // 定时任务 - 每天凌晨 2 点执行
 cron.schedule('0 2 * * *', async () => {

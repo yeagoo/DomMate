@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { DomainImportDialogEn } from './DomainImportDialogEn';
 import { DomainTableEn } from './DomainTableEn';
+import { DataExportDialogEn } from './DataExportDialogEn';
 import { Button } from '@/components/ui/button';
 import { RefreshCw } from 'lucide-react';
 import { apiService } from '@/lib/api';
@@ -161,8 +162,8 @@ export default function DashboardEn() {
       {/* 操作栏 */}
       <div className="flex items-center justify-between">
         <h2 className="text-3xl font-bold tracking-tight">Domain List</h2>
-        <div className="flex items-center space-x-4">
-                    <Button 
+                <div className="flex items-center space-x-4">
+          <Button 
             variant="outline" 
             onClick={handleRecheckAll}
             disabled={isRechecking}
@@ -170,6 +171,11 @@ export default function DashboardEn() {
             <RefreshCw className={`h-4 w-4 mr-2 ${isRechecking ? 'animate-spin' : ''}`} />
             {isRechecking ? 'Rechecking...' : 'Recheck All'}
           </Button>
+          <DataExportDialogEn 
+            onExportComplete={(result) => {
+              console.log('Export completed:', result);
+            }}
+          />
           <DomainImportDialogEn 
             onImport={handleImport}
             isLoading={isLoading}

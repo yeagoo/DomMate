@@ -1,0 +1,14 @@
+{
+  "format": "json",
+  "selectedFields": [
+    "domain",
+    "registrar",
+    "expiresAt",
+    "status",
+    "dnsProvider"
+  ],
+  "language": "zh",
+  "enabled": true,
+  "schedule": "0 3 * * 1",
+  "filename": "weekly_backup"
+}

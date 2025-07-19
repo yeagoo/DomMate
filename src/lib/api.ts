@@ -68,6 +68,20 @@ class ApiService {
       method: 'POST',
     });
   }
+
+  // 数据导出
+  async exportData(exportOptions: {
+    format: 'csv' | 'pdf' | 'json';
+    selectedFields: string[];
+    filename?: string;
+    language?: string;
+    options?: any;
+  }): Promise<{ success: boolean; message: string; file: any }> {
+    return this.request<{ success: boolean; message: string; file: any }>('/export', {
+      method: 'POST',
+      body: JSON.stringify(exportOptions),
+    });
+  }
 }
 
 export const apiService = new ApiService(); 

@@ -1,0 +1,20 @@
+﻿Domain,Registrar,Expires At,DNS Provider,Domain Status,Status Badge,Last Check,Notifications,Created At
+test-5days-fix.com,Unknown,未知,Unknown,Unknown,Unregistered,7/19/2025 9:13:07 PM,Enabled,7/19/2025
+test-15days-fix.com,Unknown,未知,Unknown,Unknown,Unregistered,7/19/2025 9:13:07 PM,Enabled,7/19/2025
+test-60days-fix.com,Unknown,未知,Unknown,Unknown,Unregistered,7/19/2025 9:13:07 PM,Enabled,7/19/2025
+test-5days-en.com,Unknown,未知,Unknown,Unknown,Unregistered,7/19/2025 9:13:07 PM,Enabled,7/19/2025
+test-15days-en.com,Unknown,未知,Unknown,Unknown,Unregistered,7/19/2025 9:13:07 PM,Enabled,7/19/2025
+test-60days-en.com,Unknown,未知,Unknown,Unknown,Unregistered,7/19/2025 9:13:07 PM,Enabled,7/19/2025
+test-7days.com,Unknown,未知,Unknown,Unknown,Unregistered,7/19/2025 9:13:07 PM,Enabled,7/19/2025
+test-30days.com,Unknown,未知,Unknown,Unknown,Unregistered,7/19/2025 9:13:07 PM,Enabled,7/19/2025
+test-90days.com,Unknown,未知,Unknown,Unknown,Unregistered,7/19/2025 9:13:07 PM,Enabled,7/19/2025
+123sn.icu,Unknown,未知,Unknown,Unknown,Failed,7/19/2025 9:13:07 PM,Enabled,7/19/2025
+claw.buzz,"Spaceship, Inc.",9/27/2025,Cloudflare,"禁止转移, 服务器禁止转移",Normal,7/19/2025 9:13:07 PM,Disabled,7/19/2025
+debian.club,"Spaceship, Inc.",6/6/2026,Cloudflare,"禁止转移, 服务器禁止转移",Normal,7/19/2025 9:13:07 PM,Enabled,7/19/2025
+upload.fan,"DNSPod, Inc.",9/1/2025,DNSPod,正常,Normal,7/19/2025 9:13:07 PM,Disabled,7/19/2025
+hestiacp.cn,阿里云计算有限公司（万网）,6/3/2026,Hichina.com,正常,Normal,7/19/2025 9:13:07 PM,Enabled,7/19/2025
+eolcn.com,DREAMHOST,6/28/2026,Cloudflare,禁止转移,Normal,7/19/2025 9:13:07 PM,Enabled,7/19/2025
+google.com,"MarkMonitor, Inc.",9/13/2028,Google Domains,"禁止更新, 禁止转移, 禁止删除",Normal,7/19/2025 9:13:07 PM,Enabled,7/19/2025
+unregistered-test-domain.com,Unknown,未知,Unknown,Unknown,Unregistered,7/19/2025 9:13:07 PM,Enabled,7/19/2025
+baidu.cn,互联网域名系统北京市工程研究中心有限公司,3/17/2029,Baidu.com,"禁止删除, 禁止更新, 禁止转移",Normal,7/19/2025 9:13:07 PM,Enabled,7/19/2025
+microsoft.com,"MarkMonitor, Inc.",5/3/2026,Azure DNS,"禁止更新, 禁止转移, 禁止删除",Normal,7/19/2025 9:13:07 PM,Enabled,7/19/2025

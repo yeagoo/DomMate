@@ -1,0 +1,151 @@
+{
+  "metadata": {
+    "exportDate": "2025-07-19T13:38:06.485Z",
+    "exportedBy": "DomainFlow",
+    "totalRecords": 19,
+    "selectedFields": [
+      "domain",
+      "registrar",
+      "expiresAt",
+      "status",
+      "dnsProvider"
+    ],
+    "language": "zh",
+    "version": "1.0"
+  },
+  "domains": [
+    {
+      "domain": "test-5days-fix.com",
+      "registrar": null,
+      "expiresAt": null,
+      "status": "unregistered",
+      "dnsProvider": null
+    },
+    {
+      "domain": "test-15days-fix.com",
+      "registrar": null,
+      "expiresAt": null,
+      "status": "unregistered",
+      "dnsProvider": null
+    },
+    {
+      "domain": "test-60days-fix.com",
+      "registrar": null,
+      "expiresAt": null,
+      "status": "unregistered",
+      "dnsProvider": null
+    },
+    {
+      "domain": "test-5days-en.com",
+      "registrar": null,
+      "expiresAt": null,
+      "status": "unregistered",
+      "dnsProvider": null
+    },
+    {
+      "domain": "test-15days-en.com",
+      "registrar": null,
+      "expiresAt": null,
+      "status": "unregistered",
+      "dnsProvider": null
+    },
+    {
+      "domain": "test-60days-en.com",
+      "registrar": null,
+      "expiresAt": null,
+      "status": "unregistered",
+      "dnsProvider": null
+    },
+    {
+      "domain": "test-7days.com",
+      "registrar": null,
+      "expiresAt": null,
+      "status": "unregistered",
+      "dnsProvider": null
+    },
+    {
+      "domain": "test-30days.com",
+      "registrar": null,
+      "expiresAt": null,
+      "status": "unregistered",
+      "dnsProvider": null
+    },
+    {
+      "domain": "test-90days.com",
+      "registrar": null,
+      "expiresAt": null,
+      "status": "unregistered",
+      "dnsProvider": null
+    },
+    {
+      "domain": "123sn.icu",
+      "registrar": null,
+      "expiresAt": null,
+      "status": "failed",
+      "dnsProvider": null
+    },
+    {
+      "domain": "claw.buzz",
+      "registrar": "Spaceship, Inc.",
+      "expiresAt": "2025-09-27T07:37:55.000Z",
+      "status": "normal",
+      "dnsProvider": "Cloudflare"
+    },
+    {
+      "domain": "debian.club",
+      "registrar": "Spaceship, Inc.",
+      "expiresAt": "2026-06-06T14:38:58.000Z",
+      "status": "normal",
+      "dnsProvider": "Cloudflare"
+    },
+    {
+      "domain": "upload.fan",
+      "registrar": "DNSPod, Inc.",
+      "expiresAt": "2025-08-31T22:47:14.000Z",
+      "status": "normal",
+      "dnsProvider": "DNSPod"
+    },
+    {
+      "domain": "hestiacp.cn",
+      "registrar": "阿里云计算有限公司（万网）",
+      "expiresAt": "2026-06-03T09:55:52.000Z",
+      "status": "normal",
+      "dnsProvider": "Hichina.com"
+    },
+    {
+      "domain": "eolcn.com",
+      "registrar": "DREAMHOST",
+      "expiresAt": "2026-06-27T17:25:00.000Z",
+      "status": "normal",
+      "dnsProvider": "Cloudflare"
+    },
+    {
+      "domain": "google.com",
+      "registrar": "MarkMonitor, Inc.",
+      "expiresAt": "2028-09-13T07:00:00.000Z",
+      "status": "normal",
+      "dnsProvider": "Google Domains"
+    },
+    {
+      "domain": "unregistered-test-domain.com",
+      "registrar": null,
+      "expiresAt": null,
+      "status": "unregistered",
+      "dnsProvider": null
+    },
+    {
+      "domain": "baidu.cn",
+      "registrar": "互联网域名系统北京市工程研究中心有限公司",
+      "expiresAt": "2029-03-17T04:48:36.000Z",
+      "status": "normal",
+      "dnsProvider": "Baidu.com"
+    },
+    {
+      "domain": "microsoft.com",
+      "registrar": "MarkMonitor, Inc.",
+      "expiresAt": "2026-05-03T00:00:00.000Z",
+      "status": "normal",
+      "dnsProvider": "Azure DNS"
+    }
+  ]
+}
