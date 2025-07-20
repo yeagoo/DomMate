@@ -8,6 +8,8 @@ export interface Domain {
   status: DomainStatus;
   lastCheck?: Date;
   notifications: boolean;
+  isImportant?: boolean;
+  notes?: string;
   createdAt: Date;
   updatedAt: Date;
 }

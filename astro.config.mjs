@@ -15,6 +15,17 @@ export default defineConfig({
   adapter: node({
     mode: 'standalone'
   }),
+  vite: {
+    server: {
+      proxy: {
+        '/api': {
+          target: 'http://localhost:3001',
+          changeOrigin: true,
+          rewrite: (path) => path
+        }
+      }
+    }
+  },
   i18n: {
     defaultLocale: "zh",
     locales: ["zh", "en"],

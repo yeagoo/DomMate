@@ -11,8 +11,9 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Search, Bell, BellOff, ArrowUpDown, AlertTriangle, CheckCircle2, Clock, XCircle, Circle, AlertCircle, Trash2, FolderPlus, Tag, Filter } from 'lucide-react';
+import { Search, Bell, BellOff, ArrowUpDown, AlertTriangle, CheckCircle2, Clock, XCircle, Circle, AlertCircle, Trash2, FolderPlus, Tag, Filter, Star, MessageSquare, Settings } from 'lucide-react';
 import { BatchGroupDialog } from './BatchGroupDialog';
+import { BatchOperationDialog } from './BatchOperationDialog';
 import { apiService } from '@/lib/api';
 import type { Domain, DomainStatus } from '@/types/domain';
 import type { Group } from '@/types/group';
@@ -58,6 +59,7 @@ export function DomainTable({
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const [selectedDomains, setSelectedDomains] = useState<Set<string>>(new Set());
   const [batchGroupDialogOpen, setBatchGroupDialogOpen] = useState(false);
+  const [batchOperationDialogOpen, setBatchOperationDialogOpen] = useState(false);
   
   // 分组筛选相关状态
   const [groups, setGroups] = useState<Group[]>([]);
@@ -184,12 +186,23 @@ export function DomainTable({
   const handleBatchGroupSuccess = () => {
     setSelectedDomains(new Set());
     setBatchGroupDialogOpen(false);
-    onGroupOperationSuccess?.();
-    // 重新加载当前视图的域名数据
+    if (onGroupOperationSuccess) {
+      onGroupOperationSuccess();
+    }
+    
+    // 重新加载当前视图的数据
     if (selectedGroupId === 'ungrouped') {
       loadUngroupedDomains();
-    } else if (selectedGroupId !== null) {
+    } else if (selectedGroupId && selectedGroupId !== null) {
       loadGroupDomains(selectedGroupId);
+    }
+  };
+
+  const handleBatchOperationSuccess = () => {
+    setSelectedDomains(new Set());
+    setBatchOperationDialogOpen(false);
+    if (onGroupOperationSuccess) {
+      onGroupOperationSuccess();
     }
   };
 
@@ -230,26 +243,32 @@ export function DomainTable({
     domainStatus: 'Domain Status',
     statusLabel: 'Status Label',
     lastCheck: 'Last Check',
-    notificationStatus: 'Notification Status'
+    notificationStatus: 'Notification Status',
+    batchOperations: 'Batch Operations',
+    important: 'Important',
+    notes: 'Notes'
   } : {
     searchPlaceholder: '搜索域名或注册商...',
     domain: '域名',
     registrar: '注册商',
-    registeredAt: '注册时间', 
+    registeredAt: '注册时间',
     expiresAt: '到期时间',
     status: '状态',
     notifications: '通知',
     actions: '操作',
     deleteSelected: '删除选中',
     groupOperation: '分组操作',
-    allGroups: '全部分组',
+    allGroups: '所有分组',
     ungrouped: '未分组',
     filterByGroup: '按分组筛选',
-    dnsProvider: 'DNS 提供商',
+    dnsProvider: 'DNS提供商',
     domainStatus: '域名状态',
     statusLabel: '状态标识',
     lastCheck: '最后检查',
-    notificationStatus: '通知状态'
+    notificationStatus: '通知状态',
+    batchOperations: '批量操作',
+    important: '重要性',
+    notes: '备注'
   };
 
   const isAllSelected = sortedDomains.length > 0 && selectedDomains.size === sortedDomains.length;
@@ -416,6 +435,14 @@ export function DomainTable({
               <FolderPlus className="h-4 w-4" />
               {labels.groupOperation} ({selectedDomains.size})
             </Button>
+            <Button
+              variant="outline"
+              onClick={() => setBatchOperationDialogOpen(true)}
+              className="flex items-center gap-2"
+            >
+              <Settings className="h-4 w-4" />
+              {labels.batchOperations} ({selectedDomains.size})
+            </Button>
             {onDeleteDomains && (
               <Button
                 variant="destructive"
@@ -464,6 +491,8 @@ export function DomainTable({
               <TableHead className="text-center">{labels.domainStatus}</TableHead>
               <TableHead className="text-center">{labels.statusLabel}</TableHead>
               <TableHead className="text-center">{labels.lastCheck}</TableHead>
+              <TableHead className="text-center">{labels.important}</TableHead>
+              <TableHead className="text-center">{labels.notes}</TableHead>
               <TableHead>{labels.notificationStatus}</TableHead>
             </TableRow>
           </TableHeader>
@@ -504,6 +533,26 @@ export function DomainTable({
                 <TableCell className="text-sm text-muted-foreground text-center">
                   {getTimeAgo(domain.lastCheck)}
                 </TableCell>
+                <TableCell className="text-center">
+                  {domain.isImportant ? (
+                    <Star className="h-4 w-4 text-yellow-500 mx-auto" />
+                  ) : (
+                    <div className="w-4 h-4 mx-auto"></div>
+                  )}
+                </TableCell>
+                <TableCell className="text-center max-w-[150px]">
+                  {domain.notes ? (
+                    <div 
+                      className="flex items-center justify-center gap-1 text-sm text-blue-600 hover:text-blue-800 cursor-help"
+                      title={domain.notes}
+                    >
+                      <MessageSquare className="h-4 w-4" />
+                      <span className="truncate">{domain.notes}</span>
+                    </div>
+                  ) : (
+                    <span className="text-muted-foreground">-</span>
+                  )}
+                </TableCell>
                 <TableCell>
                   <Button
                     variant="ghost"
@@ -536,6 +585,22 @@ export function DomainTable({
         selectedDomains={Array.from(selectedDomains)}
         domains={domains}
         onSuccess={handleBatchGroupSuccess}
+        language={language}
+      />
+      
+      {/* 批量操作对话框 */}
+      <BatchOperationDialog
+        open={batchOperationDialogOpen}
+        onClose={() => setBatchOperationDialogOpen(false)}
+        selectedDomains={Array.from(selectedDomains)}
+        domains={domains}
+        onSuccess={() => {
+          setSelectedDomains(new Set());
+          setBatchOperationDialogOpen(false);
+          if (onGroupOperationSuccess) {
+            onGroupOperationSuccess();
+          }
+        }}
         language={language}
       />
     </div>

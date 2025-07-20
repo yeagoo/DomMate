@@ -536,6 +536,8 @@ app.get('/api/domains', async (req, res) => {
     status: domain.status,
     lastCheck: domain.lastCheck ? new Date(domain.lastCheck) : null,
     notifications: Boolean(domain.notifications),
+    isImportant: Boolean(domain.isImportant),
+    notes: domain.notes || null,
     createdAt: new Date(domain.createdAt),
     updatedAt: new Date(domain.updatedAt)
   })).sort((a, b) => {
@@ -1935,3 +1937,142 @@ app.listen(PORT, async () => {
   console.log(`服务器运行在端口 ${PORT}`);
   console.log(`API 地址: http://localhost:${PORT}/api`);
 }); 
+
+// 获取域名统计
+app.get('/api/domains/stats', async (req, res) => {
+  try {
+    const stats = await db.getDomainStats();
+    res.json(stats);
+  } catch (error) {
+    console.error('获取统计数据失败:', error);
+    res.status(500).json({ error: '获取统计数据失败: ' + error.message });
+  }
+});
+
+// 获取增强的仪表板数据
+app.get('/api/dashboard/analytics', async (req, res) => {
+  try {
+    // 并行获取核心统计数据
+    const [
+      expiryDistribution,
+      monthlyTrend,
+      statusHistory
+    ] = await Promise.all([
+      db.getExpiryDistribution(),
+      db.getMonthlyExpiryTrend(),
+      db.getStatusHistory()
+    ]);
+
+    res.json({
+      expiryDistribution,
+      monthlyTrend,
+      statusHistory
+    });
+  } catch (error) {
+    console.error('获取仪表板数据失败:', error);
+    res.status(500).json({ error: '获取仪表板数据失败: ' + error.message });
+  }
+}); 
+
+// 批量标记重要
+app.post('/api/domains/batch-important', async (req, res) => {
+  try {
+    const { domainIds, isImportant } = req.body;
+    
+    if (!domainIds || !Array.isArray(domainIds) || domainIds.length === 0) {
+      return res.status(400).json({ error: '域名ID列表不能为空' });
+    }
+    
+    if (typeof isImportant !== 'boolean') {
+      return res.status(400).json({ error: '重要性标记必须为布尔值' });
+    }
+    
+    console.log(`批量${isImportant ? '标记重要' : '取消重要标记'}请求: ${domainIds.length} 个域名`);
+    
+    let successCount = 0;
+    let failCount = 0;
+    
+    for (const domainId of domainIds) {
+      try {
+        const domain = await db.getDomainById(domainId);
+        if (domain) {
+          await db.updateDomain(domainId, { isImportant });
+          console.log(`✅ ${isImportant ? '标记重要' : '取消重要标记'}成功: ${domain.domain}`);
+          successCount++;
+        } else {
+          console.log(`❌ 域名不存在: ${domainId}`);
+          failCount++;
+        }
+      } catch (error) {
+        console.error(`❌ ${isImportant ? '标记重要' : '取消重要标记'}失败: ${domainId}`, error);
+        failCount++;
+      }
+    }
+    
+    res.json({
+      success: true,
+      message: `批量${isImportant ? '标记重要' : '取消重要标记'}完成: 成功 ${successCount} 个，失败 ${failCount} 个`,
+      successCount,
+      failCount
+    });
+    
+  } catch (error) {
+    console.error(`批量${req.body.isImportant ? '标记重要' : '取消重要标记'}错误:`, error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 批量添加备注
+app.post('/api/domains/batch-notes', async (req, res) => {
+  try {
+    const { domainIds, notes } = req.body;
+    
+    if (!domainIds || !Array.isArray(domainIds) || domainIds.length === 0) {
+      return res.status(400).json({ error: '域名ID列表不能为空' });
+    }
+    
+    if (notes === undefined || notes === null) {
+      return res.status(400).json({ error: '备注内容不能为空（使用空字符串清除备注）' });
+    }
+    
+    console.log(`批量${notes ? '添加备注' : '清除备注'}请求: ${domainIds.length} 个域名`);
+    
+    let successCount = 0;
+    let failCount = 0;
+    
+    for (const domainId of domainIds) {
+      try {
+        const domain = await db.getDomainById(domainId);
+        if (domain) {
+          await db.updateDomain(domainId, { notes: notes || null });
+          console.log(`✅ ${notes ? '添加备注' : '清除备注'}成功: ${domain.domain}`);
+          successCount++;
+        } else {
+          console.log(`❌ 域名不存在: ${domainId}`);
+          failCount++;
+        }
+      } catch (error) {
+        console.error(`❌ ${notes ? '添加备注' : '清除备注'}失败: ${domainId}`, error);
+        failCount++;
+      }
+    }
+    
+    res.json({
+      success: true,
+      message: `批量${notes ? '添加备注' : '清除备注'}完成: 成功 ${successCount} 个，失败 ${failCount} 个`,
+      successCount,
+      failCount
+    });
+    
+  } catch (error) {
+    console.error(`批量${req.body.notes ? '添加备注' : '清除备注'}错误:`, error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 获取可用导出字段
+app.get('/api/export/fields', (req, res) => {
+  const language = req.query.language || 'zh';
+  const fields = exportService.getAvailableFields(language);
+  res.json({ fields });
+});

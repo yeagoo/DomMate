@@ -154,6 +154,22 @@ class ApiService {
       body: JSON.stringify(exportOptions),
     });
   }
+
+  // 批量标记重要
+  async batchMarkImportant(domainIds: string[], isImportant: boolean): Promise<{ success: boolean; message: string; successCount: number; failCount: number }> {
+    return this.request<{ success: boolean; message: string; successCount: number; failCount: number }>('/domains/batch-important', {
+      method: 'POST',
+      body: JSON.stringify({ domainIds, isImportant }),
+    });
+  }
+
+  // 批量添加备注
+  async batchAddNotes(domainIds: string[], notes: string): Promise<{ success: boolean; message: string; successCount: number; failCount: number }> {
+    return this.request<{ success: boolean; message: string; successCount: number; failCount: number }>('/domains/batch-notes', {
+      method: 'POST',
+      body: JSON.stringify({ domainIds, notes }),
+    });
+  }
 }
 
 export const apiService = new ApiService(); 

@@ -45,79 +45,97 @@ class DomainDatabase {
 
   // 数据库表结构迁移
   async migrateDatabase() {
-    return new Promise((resolve, reject) => {
-      // 检查notification_rules表是否有新的调度字段
-      this.db.all("PRAGMA table_info(notification_rules)", (err, columns) => {
-        if (err) {
-          console.error('检查表结构失败:', err);
-          reject(err);
-          return;
-        }
+    return new Promise(async (resolve, reject) => {
+      try {
+        const alterStatements = [];
 
-        const columnNames = columns.map(col => col.name);
-        const requiredColumns = ['scheduleHour', 'scheduleMinute', 'scheduleWeekday', 'cronExpression'];
-        const missingColumns = requiredColumns.filter(col => !columnNames.includes(col));
+        // 检查domains表的新字段
+        await new Promise((resolveCheck, rejectCheck) => {
+          this.db.all("PRAGMA table_info(domains)", (err, columns) => {
+            if (err) {
+              rejectCheck(err);
+              return;
+            }
 
-        if (missingColumns.length > 0) {
+            const columnNames = columns.map(col => col.name);
+            
+            if (!columnNames.includes('isImportant')) {
+              alterStatements.push('ALTER TABLE domains ADD COLUMN isImportant BOOLEAN DEFAULT 0');
+            }
+            
+            if (!columnNames.includes('notes')) {
+              alterStatements.push('ALTER TABLE domains ADD COLUMN notes TEXT');
+            }
+
+            resolveCheck();
+          });
+        });
+
+        // 检查notification_rules表是否有新的调度字段
+        await new Promise((resolveCheck, rejectCheck) => {
+          this.db.all("PRAGMA table_info(notification_rules)", (err, columns) => {
+            if (err) {
+              rejectCheck(err);
+              return;
+            }
+
+            const columnNames = columns.map(col => col.name);
+            
+            if (!columnNames.includes('scheduleHour')) {
+              alterStatements.push('ALTER TABLE notification_rules ADD COLUMN scheduleHour INTEGER DEFAULT 8');
+            }
+            
+            if (!columnNames.includes('scheduleMinute')) {
+              alterStatements.push('ALTER TABLE notification_rules ADD COLUMN scheduleMinute INTEGER DEFAULT 0');
+            }
+            
+            if (!columnNames.includes('scheduleWeekday')) {
+              alterStatements.push('ALTER TABLE notification_rules ADD COLUMN scheduleWeekday INTEGER');
+            }
+            
+            if (!columnNames.includes('cronExpression')) {
+              alterStatements.push('ALTER TABLE notification_rules ADD COLUMN cronExpression TEXT');
+            }
+
+            resolveCheck();
+          });
+        });
+
+        if (alterStatements.length > 0) {
           console.log('🔄 检测到数据库表结构更新，开始迁移...');
           
-          // 添加缺失的字段
-          const alterStatements = [];
-          
-          if (!columnNames.includes('scheduleHour')) {
-            alterStatements.push('ALTER TABLE notification_rules ADD COLUMN scheduleHour INTEGER DEFAULT 8');
-          }
-          
-          if (!columnNames.includes('scheduleMinute')) {
-            alterStatements.push('ALTER TABLE notification_rules ADD COLUMN scheduleMinute INTEGER DEFAULT 0');
-          }
-          
-          if (!columnNames.includes('scheduleWeekday')) {
-            alterStatements.push('ALTER TABLE notification_rules ADD COLUMN scheduleWeekday INTEGER');
-          }
-          
-          if (!columnNames.includes('cronExpression')) {
-            alterStatements.push('ALTER TABLE notification_rules ADD COLUMN cronExpression TEXT');
-          }
-
           // 执行所有ALTER语句
           let completedCount = 0;
           const totalCount = alterStatements.length;
 
-          if (totalCount === 0) {
-            console.log('✅ 表结构已是最新版本');
-            resolve();
-            return;
+          for (const statement of alterStatements) {
+            await new Promise((resolveAlter, rejectAlter) => {
+              this.db.run(statement, (err) => {
+                if (err) {
+                  console.error(`表结构更新失败:`, err);
+                  rejectAlter(err);
+                  return;
+                }
+
+                completedCount++;
+                console.log(`✅ 字段更新 ${completedCount}/${totalCount} 完成`);
+                resolveAlter();
+              });
+            });
           }
 
-          alterStatements.forEach((statement, index) => {
-            this.db.run(statement, (err) => {
-              if (err) {
-                console.error(`表结构更新失败 ${index + 1}:`, err);
-                reject(err);
-                return;
-              }
-
-              completedCount++;
-              console.log(`✅ 字段更新 ${completedCount}/${totalCount} 完成`);
-
-              if (completedCount === totalCount) {
-                // 所有字段添加完成，更新现有记录的cron表达式
-                this.updateExistingRulesCron()
-                  .then(() => {
-                    console.log('✅ 数据库表结构迁移完成');
-                    resolve();
-                  })
-                  .catch(reject);
-              }
-            });
-          });
-
+          // 所有字段添加完成，更新现有记录的cron表达式
+          await this.updateExistingRulesCron();
+          console.log('✅ 数据库表结构迁移完成');
         } else {
           console.log('✅ 数据库表结构已是最新版本');
-          resolve();
         }
-      });
+
+        resolve();
+      } catch (error) {
+        console.error('数据库迁移失败:', error);
+        reject(error);
+      }
     });
   }
 
@@ -185,6 +203,8 @@ class DomainDatabase {
         status TEXT DEFAULT 'normal' CHECK(status IN ('normal', 'expiring', 'expired', 'failed', 'unregistered')),
         lastCheck TEXT,
         notifications BOOLEAN DEFAULT 1,
+        isImportant BOOLEAN DEFAULT 0,
+        notes TEXT,
         createdAt TEXT NOT NULL,
         updatedAt TEXT NOT NULL
       )
@@ -680,6 +700,8 @@ class DomainDatabase {
           const domains = rows.map(row => ({
             ...row,
             notifications: Boolean(row.notifications),
+            isImportant: Boolean(row.isImportant),
+            notes: row.notes || null,
             expiresAt: row.expiresAt || null,
             lastCheck: row.lastCheck || null
           }));
@@ -700,7 +722,9 @@ class DomainDatabase {
         } else if (row) {
           resolve({
             ...row,
-            notifications: Boolean(row.notifications)
+            notifications: Boolean(row.notifications),
+            isImportant: Boolean(row.isImportant),
+            notes: row.notes || null
           });
         } else {
           resolve(null);
@@ -1870,6 +1894,197 @@ class DomainDatabase {
         }
       });
     });
+  }
+
+  // 获取到期时间分布数据
+  async getExpiryDistribution() {
+    const sql = `
+      SELECT 
+        CASE 
+          WHEN expiresAt IS NULL OR expiresAt = '' THEN '未知'
+          WHEN julianday(expiresAt) - julianday('now') < 0 THEN '已过期'
+          WHEN julianday(expiresAt) - julianday('now') <= 30 THEN '30天内'
+          WHEN julianday(expiresAt) - julianday('now') <= 90 THEN '31-90天'
+          WHEN julianday(expiresAt) - julianday('now') <= 180 THEN '91-180天'
+          WHEN julianday(expiresAt) - julianday('now') <= 365 THEN '181-365天'
+          ELSE '1年以上'
+        END as period,
+        COUNT(*) as count
+      FROM domains 
+      GROUP BY 1
+      ORDER BY 
+        CASE 
+          WHEN period = '已过期' THEN 1
+          WHEN period = '30天内' THEN 2
+          WHEN period = '31-90天' THEN 3
+          WHEN period = '91-180天' THEN 4
+          WHEN period = '181-365天' THEN 5
+          WHEN period = '1年以上' THEN 6
+          ELSE 7
+        END
+    `;
+
+    return new Promise((resolve, reject) => {
+      this.db.all(sql, [], (err, rows) => {
+        if (err) {
+          reject(err);
+        } else {
+          resolve(rows);
+        }
+      });
+    });
+  }
+
+  // 获取注册商统计数据
+  async getRegistrarStats() {
+    const sql = `
+      SELECT 
+        COALESCE(registrar, '未知') as name,
+        COUNT(*) as value,
+        ROUND(COUNT(*) * 100.0 / (SELECT COUNT(*) FROM domains), 1) as percentage
+      FROM domains 
+      GROUP BY registrar
+      ORDER BY value DESC
+      LIMIT 10
+    `;
+
+    return new Promise((resolve, reject) => {
+      this.db.all(sql, [], (err, rows) => {
+        if (err) {
+          reject(err);
+        } else {
+          // 为每个注册商分配颜色
+          const colors = [
+            '#8884d8', '#82ca9d', '#ffc658', '#ff7300', '#8dd1e1',
+            '#d084d0', '#82d982', '#ffb347', '#ff6b6b', '#4ecdc4'
+          ];
+          const result = rows.map((row, index) => ({
+            ...row,
+            fill: colors[index % colors.length]
+          }));
+          resolve(result);
+        }
+      });
+    });
+  }
+
+  // 获取月度到期趋势
+  async getMonthlyExpiryTrend() {
+    const sql = `
+      SELECT 
+        strftime('%Y-%m', expiresAt) as month,
+        COUNT(*) as count
+      FROM domains 
+      WHERE expiresAt IS NOT NULL AND expiresAt != ''
+        AND julianday(expiresAt) >= julianday('now', '-12 months')
+        AND julianday(expiresAt) <= julianday('now', '+12 months')
+      GROUP BY month
+      ORDER BY month
+    `;
+
+    return new Promise((resolve, reject) => {
+      this.db.all(sql, [], (err, rows) => {
+        if (err) {
+          reject(err);
+        } else {
+          // 格式化月份显示
+          const result = rows.map(row => ({
+            month: row.month,
+            monthDisplay: this.formatMonth(row.month),
+            count: row.count
+          }));
+          resolve(result);
+        }
+      });
+    });
+  }
+
+  // 获取域名状态变化历史（模拟数据，实际应该从历史表获取）
+  async getStatusHistory() {
+    const sql = `
+      SELECT 
+        status,
+        COUNT(*) as count
+      FROM domains
+      GROUP BY status
+    `;
+
+    return new Promise((resolve, reject) => {
+      this.db.all(sql, [], (err, rows) => {
+        if (err) {
+          reject(err);
+        } else {
+          // 生成最近7天的模拟历史数据
+          const result = [];
+          const today = new Date();
+          
+          for (let i = 6; i >= 0; i--) {
+            const date = new Date(today);
+            date.setDate(date.getDate() - i);
+            const dateStr = date.toISOString().split('T')[0];
+            
+            const dayData = {
+              date: dateStr,
+              normal: rows.find(r => r.status === 'normal')?.count || 0,
+              expiring: Math.max(0, (rows.find(r => r.status === 'expiring')?.count || 0) - Math.floor(Math.random() * 3)),
+              expired: rows.find(r => r.status === 'expired')?.count || 0,
+              failed: rows.find(r => r.status === 'failed')?.count || 0
+            };
+            result.push(dayData);
+          }
+          
+          resolve(result);
+        }
+      });
+    });
+  }
+
+  // 获取成本统计（模拟数据，需要实际成本字段）
+  async getCostStats() {
+    const sql = `
+      SELECT 
+        registrar,
+        COUNT(*) as domainCount,
+        -- 这里使用模拟价格，实际应该从域名表中的cost字段获取
+        CASE registrar
+          WHEN 'GoDaddy Inc.' THEN COUNT(*) * 12.99
+          WHEN 'Namecheap, Inc.' THEN COUNT(*) * 10.99  
+          WHEN 'Alibaba Cloud Computing Ltd. d/b/a HiChina' THEN COUNT(*) * 8.99
+          WHEN 'DNSPod, Inc.' THEN COUNT(*) * 9.99
+          ELSE COUNT(*) * 11.99
+        END as totalCost
+      FROM domains 
+      WHERE registrar IS NOT NULL AND registrar != ''
+      GROUP BY registrar
+      ORDER BY totalCost DESC
+    `;
+
+    return new Promise((resolve, reject) => {
+      this.db.all(sql, [], (err, rows) => {
+        if (err) {
+          reject(err);
+        } else {
+          const totalCost = rows.reduce((sum, row) => sum + row.totalCost, 0);
+          const result = {
+            byRegistrar: rows,
+            totalCost: totalCost,
+            averageCost: rows.length > 0 ? totalCost / rows.reduce((sum, row) => sum + row.domainCount, 0) : 0
+          };
+          resolve(result);
+        }
+      });
+    });
+  }
+
+  // 辅助方法：格式化月份
+  formatMonth(monthStr) {
+    if (!monthStr) return '';
+    const [year, month] = monthStr.split('-');
+    const monthNames = [
+      '1月', '2月', '3月', '4月', '5月', '6月',
+      '7月', '8月', '9月', '10月', '11月', '12月'
+    ];
+    return `${year}年${monthNames[parseInt(month) - 1]}`;
   }
 }
 
