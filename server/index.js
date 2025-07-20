@@ -11,6 +11,8 @@ import { queryViewDNS, queryIP2WHOIS } from './thirdPartyApis.js';
 import db from './database.js';
 import exportService from './exportService.js';
 import scheduledExportService from './scheduledExport.js';
+import emailService from './emailService.js';
+import cronScheduler from './cronScheduler.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -1223,6 +1225,676 @@ function formatFileSize(bytes) {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 }
 
+// ===============================
+// 邮件系统 API 路由
+// ===============================
+
+// 邮件配置相关 API
+
+// 获取所有邮件配置
+app.get('/api/email/configs', async (req, res) => {
+  try {
+    const configs = await db.getAllEmailConfigs();
+    // 隐藏敏感信息
+    const safeConfigs = configs.map(config => ({
+      ...config,
+      password: '****'
+    }));
+    res.json(safeConfigs);
+  } catch (error) {
+    console.error('获取邮件配置失败:', error);
+    res.status(500).json({ error: '获取邮件配置失败: ' + error.message });
+  }
+});
+
+// 根据ID获取邮件配置
+app.get('/api/email/configs/:id', async (req, res) => {
+  try {
+    const config = await db.getEmailConfigById(req.params.id);
+    if (!config) {
+      return res.status(404).json({ error: '邮件配置不存在' });
+    }
+    
+    // 隐藏密码
+    config.password = '****';
+    res.json(config);
+  } catch (error) {
+    console.error('获取邮件配置失败:', error);
+    res.status(500).json({ error: '获取邮件配置失败: ' + error.message });
+  }
+});
+
+// 添加邮件配置
+app.post('/api/email/configs', async (req, res) => {
+  try {
+    const { name, host, port, secure, username, password, fromEmail, fromName, isDefault } = req.body;
+
+    if (!name || !host || !port || !username || !password || !fromEmail) {
+      return res.status(400).json({ error: '缺少必需字段' });
+    }
+
+    const configData = {
+      id: 'email_config_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
+      name,
+      host,
+      port: parseInt(port),
+      secure: Boolean(secure),
+      username,
+      password,
+      fromEmail,
+      fromName: fromName || name,
+      isDefault: Boolean(isDefault),
+      isActive: true
+    };
+
+    const newConfig = await db.addEmailConfig(configData);
+    
+    // 隐藏密码
+    newConfig.password = '****';
+    res.json(newConfig);
+  } catch (error) {
+    console.error('添加邮件配置失败:', error);
+    res.status(500).json({ error: '添加邮件配置失败: ' + error.message });
+  }
+});
+
+// 更新邮件配置
+app.put('/api/email/configs/:id', async (req, res) => {
+  try {
+    const updateData = { ...req.body };
+    
+    // 如果密码是****，则不更新密码字段
+    if (updateData.password === '****') {
+      delete updateData.password;
+    }
+
+    await db.updateEmailConfig(req.params.id, updateData);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('更新邮件配置失败:', error);
+    res.status(500).json({ error: '更新邮件配置失败: ' + error.message });
+  }
+});
+
+// 删除邮件配置
+app.delete('/api/email/configs/:id', async (req, res) => {
+  try {
+    await db.deleteEmailConfig(req.params.id);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('删除邮件配置失败:', error);
+    res.status(500).json({ error: '删除邮件配置失败: ' + error.message });
+  }
+});
+
+// 测试邮件配置
+app.post('/api/email/configs/:id/test', async (req, res) => {
+  try {
+    const result = await emailService.testEmailConfig(req.params.id);
+    res.json(result);
+  } catch (error) {
+    console.error('测试邮件配置失败:', error);
+    res.status(500).json({ error: '测试邮件配置失败: ' + error.message });
+  }
+});
+
+// 邮件模板相关 API
+
+// 获取所有邮件模板
+app.get('/api/email/templates', async (req, res) => {
+  try {
+    const { type, language } = req.query;
+    
+    let templates;
+    if (type && language) {
+      templates = await db.getEmailTemplatesByTypeAndLanguage(type, language);
+    } else {
+      templates = await db.getAllEmailTemplates();
+    }
+    
+    res.json(templates);
+  } catch (error) {
+    console.error('获取邮件模板失败:', error);
+    res.status(500).json({ error: '获取邮件模板失败: ' + error.message });
+  }
+});
+
+// 根据ID获取邮件模板
+app.get('/api/email/templates/:id', async (req, res) => {
+  try {
+    const template = await db.getEmailTemplateById(req.params.id);
+    if (!template) {
+      return res.status(404).json({ error: '邮件模板不存在' });
+    }
+    
+    res.json(template);
+  } catch (error) {
+    console.error('获取邮件模板失败:', error);
+    res.status(500).json({ error: '获取邮件模板失败: ' + error.message });
+  }
+});
+
+// 添加邮件模板
+app.post('/api/email/templates', async (req, res) => {
+  try {
+    const { name, type, language, subject, htmlContent, textContent, variables, isActive } = req.body;
+
+    if (!name || !type || !language || !subject || !htmlContent) {
+      return res.status(400).json({ error: '缺少必需字段' });
+    }
+
+    const templateData = {
+      id: 'email_template_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
+      name,
+      type,
+      language,
+      subject,
+      htmlContent,
+      textContent: textContent || '',
+      variables: variables || [],
+      isDefault: false,
+      isActive: isActive !== false
+    };
+
+    const newTemplate = await db.addEmailTemplate(templateData);
+    res.json(newTemplate);
+  } catch (error) {
+    console.error('添加邮件模板失败:', error);
+    res.status(500).json({ error: '添加邮件模板失败: ' + error.message });
+  }
+});
+
+// 更新邮件模板
+app.put('/api/email/templates/:id', async (req, res) => {
+  try {
+    await db.updateEmailTemplate(req.params.id, req.body);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('更新邮件模板失败:', error);
+    res.status(500).json({ error: '更新邮件模板失败: ' + error.message });
+  }
+});
+
+// 删除邮件模板
+app.delete('/api/email/templates/:id', async (req, res) => {
+  try {
+    await db.deleteEmailTemplate(req.params.id);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('删除邮件模板失败:', error);
+    res.status(500).json({ error: '删除邮件模板失败: ' + error.message });
+  }
+});
+
+// 预览邮件模板
+app.post('/api/email/templates/:id/preview', async (req, res) => {
+  try {
+    const { templateData = {} } = req.body;
+    const preview = await emailService.previewTemplate(req.params.id, templateData);
+    res.json(preview);
+  } catch (error) {
+    console.error('预览邮件模板失败:', error);
+    res.status(500).json({ error: '预览邮件模板失败: ' + error.message });
+  }
+});
+
+// 预览自定义邮件模板内容
+app.post('/api/email/templates/preview-custom', async (req, res) => {
+  try {
+    const { subject, htmlContent, templateData = {} } = req.body;
+    const preview = await emailService.previewCustomTemplate(subject, htmlContent, templateData);
+    res.json(preview);
+  } catch (error) {
+    console.error('预览自定义邮件模板失败:', error);
+    res.status(500).json({ error: '预览自定义邮件模板失败: ' + error.message });
+  }
+});
+
+// 通知规则相关 API
+
+// 获取所有通知规则
+app.get('/api/email/rules', async (req, res) => {
+  try {
+    const rules = await db.getAllNotificationRules();
+    res.json(rules);
+  } catch (error) {
+    console.error('获取通知规则失败:', error);
+    res.status(500).json({ error: '获取通知规则失败: ' + error.message });
+  }
+});
+
+// 根据ID获取通知规则
+app.get('/api/email/rules/:id', async (req, res) => {
+  try {
+    const rule = await db.getNotificationRuleById(req.params.id);
+    if (!rule) {
+      return res.status(404).json({ error: '通知规则不存在' });
+    }
+    
+    res.json(rule);
+  } catch (error) {
+    console.error('获取通知规则失败:', error);
+    res.status(500).json({ error: '获取通知规则失败: ' + error.message });
+  }
+});
+
+// 添加通知规则
+app.post('/api/email/rules', async (req, res) => {
+  try {
+    const { 
+      name, type, days, scheduleHour, scheduleMinute, scheduleWeekday,
+      emailConfigId, templateId, recipients, isActive 
+    } = req.body;
+
+    if (!name || !type || !emailConfigId || !templateId || !recipients || !recipients.length) {
+      return res.status(400).json({ error: '缺少必需字段' });
+    }
+
+    // 验证邮件地址格式
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    for (const email of recipients) {
+      if (!emailRegex.test(email)) {
+        return res.status(400).json({ error: `无效的邮件地址: ${email}` });
+      }
+    }
+
+    // 验证调度参数
+    const hour = scheduleHour !== undefined ? parseInt(scheduleHour) : 8;
+    const minute = scheduleMinute !== undefined ? parseInt(scheduleMinute) : 0;
+    const weekday = scheduleWeekday !== undefined ? parseInt(scheduleWeekday) : 1;
+
+    if (hour < 0 || hour > 23) {
+      return res.status(400).json({ error: '小时必须在0-23之间' });
+    }
+    if (minute < 0 || minute > 59) {
+      return res.status(400).json({ error: '分钟必须在0-59之间' });
+    }
+    if (type === 'weekly_summary' && (weekday < 0 || weekday > 6)) {
+      return res.status(400).json({ error: '星期几必须在0-6之间' });
+    }
+
+    const ruleData = {
+      id: 'notification_rule_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
+      name,
+      type,
+      days: type === 'expiry_reminder' ? parseInt(days || 7) : null,
+      scheduleHour: hour,
+      scheduleMinute: minute,
+      scheduleWeekday: type === 'weekly_summary' ? weekday : null,
+      emailConfigId,
+      templateId,
+      recipients,
+      isActive: isActive !== false
+    };
+
+    const newRule = await db.addNotificationRule(ruleData);
+    
+    // 如果规则是活跃的，注册动态定时任务
+    if (newRule.isActive && newRule.cronExpression) {
+      const taskFunction = createRuleTaskFunction(newRule);
+      cronScheduler.registerDynamicTask(newRule.id, newRule.cronExpression, taskFunction);
+    }
+    
+    res.json(newRule);
+  } catch (error) {
+    console.error('添加通知规则失败:', error);
+    res.status(500).json({ error: '添加通知规则失败: ' + error.message });
+  }
+});
+
+// 更新通知规则
+app.put('/api/email/rules/:id', async (req, res) => {
+  try {
+    const updateData = { ...req.body };
+    
+    // 验证邮件地址格式
+    if (updateData.recipients) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      for (const email of updateData.recipients) {
+        if (!emailRegex.test(email)) {
+          return res.status(400).json({ error: `无效的邮件地址: ${email}` });
+        }
+      }
+    }
+
+    // 验证调度参数
+    if (updateData.scheduleHour !== undefined) {
+      const hour = parseInt(updateData.scheduleHour);
+      if (hour < 0 || hour > 23) {
+        return res.status(400).json({ error: '小时必须在0-23之间' });
+      }
+      updateData.scheduleHour = hour;
+    }
+    
+    if (updateData.scheduleMinute !== undefined) {
+      const minute = parseInt(updateData.scheduleMinute);
+      if (minute < 0 || minute > 59) {
+        return res.status(400).json({ error: '分钟必须在0-59之间' });
+      }
+      updateData.scheduleMinute = minute;
+    }
+    
+    if (updateData.scheduleWeekday !== undefined) {
+      const weekday = parseInt(updateData.scheduleWeekday);
+      if (weekday < 0 || weekday > 6) {
+        return res.status(400).json({ error: '星期几必须在0-6之间' });
+      }
+      updateData.scheduleWeekday = weekday;
+    }
+
+    // 先停止现有的动态任务
+    cronScheduler.stopDynamicTask(req.params.id);
+
+    // 更新数据库
+    await db.updateNotificationRule(req.params.id, updateData);
+    
+    // 获取更新后的规则信息
+    const updatedRule = await db.getNotificationRuleById(req.params.id);
+    
+    // 如果规则是活跃的且有cron表达式，重新注册动态任务
+    if (updatedRule && updatedRule.isActive && updatedRule.cronExpression) {
+      const taskFunction = createRuleTaskFunction(updatedRule);
+      cronScheduler.registerDynamicTask(updatedRule.id, updatedRule.cronExpression, taskFunction);
+    }
+    
+    res.json({ success: true });
+  } catch (error) {
+    console.error('更新通知规则失败:', error);
+    res.status(500).json({ error: '更新通知规则失败: ' + error.message });
+  }
+});
+
+// 删除通知规则
+app.delete('/api/email/rules/:id', async (req, res) => {
+  try {
+    // 停止相关的动态任务
+    cronScheduler.stopDynamicTask(req.params.id);
+    
+    // 删除数据库记录
+    await db.deleteNotificationRule(req.params.id);
+    
+    res.json({ success: true });
+  } catch (error) {
+    console.error('删除通知规则失败:', error);
+    res.status(500).json({ error: '删除通知规则失败: ' + error.message });
+  }
+});
+
+// 手动触发通知规则
+app.post('/api/email/rules/:id/trigger', async (req, res) => {
+  try {
+    const rule = await db.getNotificationRuleById(req.params.id);
+    if (!rule) {
+      return res.status(404).json({ error: '通知规则不存在' });
+    }
+
+    let results = [];
+    
+    if (rule.type === 'expiry_reminder') {
+      results = await emailService.sendExpiryReminders([rule.days]);
+    } else if (rule.type === 'daily_summary') {
+      results = await emailService.sendSummaryReports('daily');
+    } else if (rule.type === 'weekly_summary') {
+      results = await emailService.sendSummaryReports('weekly');
+    }
+
+    res.json({ success: true, results });
+  } catch (error) {
+    console.error('触发通知规则失败:', error);
+    res.status(500).json({ error: '触发通知规则失败: ' + error.message });
+  }
+});
+
+// 通知记录相关 API
+
+// 获取通知记录
+app.get('/api/email/logs', async (req, res) => {
+  try {
+    const { limit = 50, offset = 0 } = req.query;
+    const logs = await db.getNotificationLogs(parseInt(limit), parseInt(offset));
+    res.json(logs);
+  } catch (error) {
+    console.error('获取通知记录失败:', error);
+    res.status(500).json({ error: '获取通知记录失败: ' + error.message });
+  }
+});
+
+// 重试失败的邮件
+app.post('/api/email/retry', async (req, res) => {
+  try {
+    const results = await emailService.retryFailedEmails();
+    res.json({ success: true, results });
+  } catch (error) {
+    console.error('重试失败邮件失败:', error);
+    res.status(500).json({ error: '重试失败邮件失败: ' + error.message });
+  }
+});
+
+// 发送测试邮件
+app.post('/api/email/send-test', async (req, res) => {
+  try {
+    const { configId, templateId, recipient, templateData } = req.body;
+
+    if (!recipient) {
+      return res.status(400).json({ error: '缺少接收者邮箱' });
+    }
+
+    // 验证邮件地址格式
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(recipient)) {
+      return res.status(400).json({ error: '无效的邮件地址' });
+    }
+
+    const result = await emailService.sendEmail({
+      configId,
+      templateId,
+      recipient,
+      templateData
+    });
+
+    res.json(result);
+  } catch (error) {
+    console.error('发送测试邮件失败:', error);
+    res.status(500).json({ error: '发送测试邮件失败: ' + error.message });
+  }
+});
+
+// 获取邮件统计信息
+app.get('/api/email/stats', async (req, res) => {
+  try {
+    const [configs, templates, rules, recentLogs] = await Promise.all([
+      db.getAllEmailConfigs(),
+      db.getAllEmailTemplates(),
+      db.getAllNotificationRules(),
+      db.getNotificationLogs(10, 0)
+    ]);
+
+    const activeConfigs = configs.filter(c => c.isActive).length;
+    const activeTemplates = templates.filter(t => t.isActive).length;
+    const activeRules = rules.filter(r => r.isActive).length;
+    
+    const sentToday = recentLogs.filter(log => {
+      const today = new Date().toDateString();
+      const logDate = new Date(log.createdAt).toDateString();
+      return logDate === today && log.status === 'sent';
+    }).length;
+
+    const failedToday = recentLogs.filter(log => {
+      const today = new Date().toDateString();
+      const logDate = new Date(log.createdAt).toDateString();
+      return logDate === today && log.status === 'failed';
+    }).length;
+
+    res.json({
+      configs: {
+        total: configs.length,
+        active: activeConfigs
+      },
+      templates: {
+        total: templates.length,
+        active: activeTemplates
+      },
+      rules: {
+        total: rules.length,
+        active: activeRules
+      },
+      todayStats: {
+        sent: sentToday,
+        failed: failedToday
+      }
+    });
+  } catch (error) {
+    console.error('获取邮件统计失败:', error);
+    res.status(500).json({ error: '获取邮件统计失败: ' + error.message });
+  }
+});
+
+// 创建规则任务执行函数
+function createRuleTaskFunction(rule) {
+  return async () => {
+    console.log(`🔔 执行通知规则: ${rule.name} (${rule.type})`);
+    
+    try {
+      let results = [];
+      
+      switch (rule.type) {
+        case 'expiry_reminder':
+          // 域名到期提醒
+          const days = rule.days || 7;
+          if (days > 0) {
+            results = await emailService.sendExpiryReminders([days]);
+          } else {
+            // 到期后提醒（负数天数）
+            results = await emailService.sendExpiredReminders([Math.abs(days)]);
+          }
+          break;
+          
+        case 'daily_summary':
+          // 每日汇总
+          results = await emailService.sendSummaryReports('daily');
+          break;
+          
+        case 'weekly_summary':
+          // 每周汇总
+          results = await emailService.sendSummaryReports('weekly');
+          break;
+          
+        default:
+          console.warn(`未知的规则类型: ${rule.type}`);
+          return;
+      }
+      
+      // 更新规则执行信息
+      const now = new Date().toISOString();
+      await db.updateNotificationRuleRunInfo(rule.id, now, null);
+      
+      const successCount = results.filter(r => r.success).length;
+      const failCount = results.filter(r => !r.success).length;
+      console.log(`✅ 规则执行完成: ${rule.name}, 成功${successCount}封, 失败${failCount}封`);
+      
+    } catch (error) {
+      console.error(`❌ 规则执行失败: ${rule.name}`, error.message);
+    }
+  };
+}
+
+// 初始化动态定时任务
+async function initializeDynamicTasks() {
+  console.log('🚀 初始化动态定时任务...');
+  
+  try {
+    const rules = await db.getAllNotificationRules();
+    const activeRules = rules.filter(rule => rule.isActive && rule.cronExpression);
+    
+    let successCount = 0;
+    for (const rule of activeRules) {
+      const taskFunction = createRuleTaskFunction(rule);
+      if (cronScheduler.registerDynamicTask(rule.id, rule.cronExpression, taskFunction)) {
+        successCount++;
+      }
+    }
+    
+    console.log(`✅ 动态任务初始化完成: ${successCount}/${activeRules.length} 个任务`);
+    
+  } catch (error) {
+    console.error('❌ 初始化动态任务失败:', error.message);
+  }
+}
+
+// ============== 定时任务 ==============
+
+// 定时任务 - 每天上午 9 点发送域名到期提醒
+cron.schedule('0 9 * * *', async () => {
+  console.log('🔔 开始发送域名到期提醒...');
+  try {
+    const results = await emailService.sendExpiryReminders([7, 30, 90]);
+    const successCount = results.filter(r => r.success).length;
+    const failCount = results.filter(r => !r.success).length;
+    console.log(`✅ 到期提醒发送完成: 成功${successCount}封, 失败${failCount}封`);
+  } catch (error) {
+    console.error('❌ 发送到期提醒失败:', error.message);
+  }
+});
+
+// 定时任务 - 每天早上 8 点发送日报
+cron.schedule('0 8 * * *', async () => {
+  console.log('📊 开始发送每日汇总报告...');
+  try {
+    const results = await emailService.sendSummaryReports('daily');
+    const successCount = results.filter(r => r.success).length;
+    const failCount = results.filter(r => !r.success).length;
+    console.log(`✅ 日报发送完成: 成功${successCount}封, 失败${failCount}封`);
+  } catch (error) {
+    console.error('❌ 发送日报失败:', error.message);
+  }
+});
+
+// 定时任务 - 每周一早上 8:30 发送周报
+cron.schedule('30 8 * * 1', async () => {
+  console.log('📈 开始发送每周汇总报告...');
+  try {
+    const results = await emailService.sendSummaryReports('weekly');
+    const successCount = results.filter(r => r.success).length;
+    const failCount = results.filter(r => !r.success).length;
+    console.log(`✅ 周报发送完成: 成功${successCount}封, 失败${failCount}封`);
+  } catch (error) {
+    console.error('❌ 发送周报失败:', error.message);
+  }
+});
+
+// 定时任务 - 每小时重试失败的邮件
+cron.schedule('0 * * * *', async () => {
+  console.log('🔄 开始重试失败的邮件...');
+  try {
+    const results = await emailService.retryFailedEmails();
+    if (results.length > 0) {
+      const successCount = results.filter(r => r.success).length;
+      const failCount = results.filter(r => !r.success).length;
+      console.log(`✅ 邮件重试完成: 成功${successCount}封, 失败${failCount}封`);
+    } else {
+      console.log('✅ 没有需要重试的邮件');
+    }
+  } catch (error) {
+    console.error('❌ 重试失败邮件时出错:', error.message);
+  }
+});
+
+// 定时任务 - 每天凌晨 1 点清理过期的通知记录 (保留30天)
+cron.schedule('0 1 * * *', async () => {
+  console.log('🗑️  开始清理过期通知记录...');
+  try {
+    // 删除30天前的通知记录
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    
+    // 这里需要在database.js中添加清理方法
+    // 暂时用日志记录
+    console.log('✅ 通知记录清理完成 (功能待完善)');
+  } catch (error) {
+    console.error('❌ 清理通知记录失败:', error.message);
+  }
+});
+
 // 定时任务 - 每天凌晨 2 点执行
 cron.schedule('0 2 * * *', async () => {
   console.log('开始定时更新域名信息...');
@@ -1259,6 +1931,7 @@ cron.schedule('0 2 * * *', async () => {
 
 app.listen(PORT, async () => {
   await db.init();
+  await initializeDynamicTasks(); // 初始化动态定时任务
   console.log(`服务器运行在端口 ${PORT}`);
   console.log(`API 地址: http://localhost:${PORT}/api`);
 }); 

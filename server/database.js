@@ -23,8 +23,151 @@ class DomainDatabase {
           reject(err);
         } else {
           console.log('✅ SQLite数据库连接成功');
-          this.createTable().then(resolve).catch(reject);
+          
+          this.db.serialize(async () => {
+            try {
+              // 创建基础表
+              await this.createTable();
+              
+              // 迁移数据库表结构（添加新字段）
+              await this.migrateDatabase();
+              
+              resolve();
+            } catch (error) {
+              console.error('数据库初始化失败:', error);
+              reject(error);
+            }
+          });
         }
+      });
+    });
+  }
+
+  // 数据库表结构迁移
+  async migrateDatabase() {
+    return new Promise((resolve, reject) => {
+      // 检查notification_rules表是否有新的调度字段
+      this.db.all("PRAGMA table_info(notification_rules)", (err, columns) => {
+        if (err) {
+          console.error('检查表结构失败:', err);
+          reject(err);
+          return;
+        }
+
+        const columnNames = columns.map(col => col.name);
+        const requiredColumns = ['scheduleHour', 'scheduleMinute', 'scheduleWeekday', 'cronExpression'];
+        const missingColumns = requiredColumns.filter(col => !columnNames.includes(col));
+
+        if (missingColumns.length > 0) {
+          console.log('🔄 检测到数据库表结构更新，开始迁移...');
+          
+          // 添加缺失的字段
+          const alterStatements = [];
+          
+          if (!columnNames.includes('scheduleHour')) {
+            alterStatements.push('ALTER TABLE notification_rules ADD COLUMN scheduleHour INTEGER DEFAULT 8');
+          }
+          
+          if (!columnNames.includes('scheduleMinute')) {
+            alterStatements.push('ALTER TABLE notification_rules ADD COLUMN scheduleMinute INTEGER DEFAULT 0');
+          }
+          
+          if (!columnNames.includes('scheduleWeekday')) {
+            alterStatements.push('ALTER TABLE notification_rules ADD COLUMN scheduleWeekday INTEGER');
+          }
+          
+          if (!columnNames.includes('cronExpression')) {
+            alterStatements.push('ALTER TABLE notification_rules ADD COLUMN cronExpression TEXT');
+          }
+
+          // 执行所有ALTER语句
+          let completedCount = 0;
+          const totalCount = alterStatements.length;
+
+          if (totalCount === 0) {
+            console.log('✅ 表结构已是最新版本');
+            resolve();
+            return;
+          }
+
+          alterStatements.forEach((statement, index) => {
+            this.db.run(statement, (err) => {
+              if (err) {
+                console.error(`表结构更新失败 ${index + 1}:`, err);
+                reject(err);
+                return;
+              }
+
+              completedCount++;
+              console.log(`✅ 字段更新 ${completedCount}/${totalCount} 完成`);
+
+              if (completedCount === totalCount) {
+                // 所有字段添加完成，更新现有记录的cron表达式
+                this.updateExistingRulesCron()
+                  .then(() => {
+                    console.log('✅ 数据库表结构迁移完成');
+                    resolve();
+                  })
+                  .catch(reject);
+              }
+            });
+          });
+
+        } else {
+          console.log('✅ 数据库表结构已是最新版本');
+          resolve();
+        }
+      });
+    });
+  }
+
+  // 更新现有规则的cron表达式
+  async updateExistingRulesCron() {
+    return new Promise((resolve, reject) => {
+      // 获取所有没有cron表达式的规则
+      const selectSQL = `
+        SELECT id, type, scheduleHour, scheduleMinute, scheduleWeekday 
+        FROM notification_rules 
+        WHERE cronExpression IS NULL OR cronExpression = ''
+      `;
+
+      this.db.all(selectSQL, (err, rules) => {
+        if (err) {
+          reject(err);
+          return;
+        }
+
+        if (rules.length === 0) {
+          resolve();
+          return;
+        }
+
+        console.log(`🔄 更新 ${rules.length} 个现有规则的cron表达式...`);
+
+        let completedCount = 0;
+        rules.forEach(rule => {
+          const cronExpression = this.generateCronExpression(
+            rule.type,
+            rule.scheduleHour || 8,
+            rule.scheduleMinute || 0,
+            rule.scheduleWeekday || 1
+          );
+
+          const updateSQL = 'UPDATE notification_rules SET cronExpression = ? WHERE id = ?';
+          
+          this.db.run(updateSQL, [cronExpression, rule.id], (err) => {
+            if (err) {
+              console.error(`更新规则 ${rule.id} 的cron表达式失败:`, err);
+            } else {
+              console.log(`✅ 更新规则 ${rule.id} 的cron表达式: ${cronExpression}`);
+            }
+
+            completedCount++;
+            if (completedCount === rules.length) {
+              resolve();
+            }
+          });
+        });
       });
     });
   }
@@ -70,6 +213,85 @@ class DomainDatabase {
       )
     `;
 
+    // 邮件配置表
+    const createEmailConfigsTableSQL = `
+      CREATE TABLE IF NOT EXISTS email_configs (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        host TEXT NOT NULL,
+        port INTEGER NOT NULL,
+        secure BOOLEAN DEFAULT 1,
+        username TEXT NOT NULL,
+        password TEXT NOT NULL,
+        fromEmail TEXT NOT NULL,
+        fromName TEXT,
+        isDefault BOOLEAN DEFAULT 0,
+        isActive BOOLEAN DEFAULT 1,
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL
+      )
+    `;
+
+    // 邮件模板表
+    const createEmailTemplatesTableSQL = `
+      CREATE TABLE IF NOT EXISTS email_templates (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        type TEXT NOT NULL CHECK(type IN ('reminder', 'summary')),
+        language TEXT NOT NULL DEFAULT 'zh' CHECK(language IN ('zh', 'en')),
+        subject TEXT NOT NULL,
+        htmlContent TEXT NOT NULL,
+        textContent TEXT,
+        variables TEXT, -- JSON格式存储可用变量
+        isDefault BOOLEAN DEFAULT 0,
+        isActive BOOLEAN DEFAULT 1,
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL
+      )
+    `;
+
+    // 通知规则表
+    const createNotificationRulesTableSQL = `
+      CREATE TABLE IF NOT EXISTS notification_rules (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        type TEXT NOT NULL CHECK(type IN ('expiry_reminder', 'daily_summary', 'weekly_summary')),
+        days INTEGER, -- 提醒天数（到期提醒：正数=到期前，负数=到期后）
+        scheduleHour INTEGER DEFAULT 8, -- 发送小时（0-23）
+        scheduleMinute INTEGER DEFAULT 0, -- 发送分钟（0-59）
+        scheduleWeekday INTEGER, -- 周几发送（weekly_summary：0=周日，1=周一...6=周六）
+        cronExpression TEXT, -- 自动生成的cron表达式
+        isActive BOOLEAN DEFAULT 1,
+        emailConfigId TEXT,
+        templateId TEXT,
+        recipients TEXT NOT NULL, -- JSON格式存储邮件接收者列表
+        lastRun TEXT,
+        nextRun TEXT,
+        runCount INTEGER DEFAULT 0,
+        createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL,
+        FOREIGN KEY (emailConfigId) REFERENCES email_configs (id) ON DELETE SET NULL,
+        FOREIGN KEY (templateId) REFERENCES email_templates (id) ON DELETE SET NULL
+      )
+    `;
+
+    // 通知记录表
+    const createNotificationLogsTableSQL = `
+      CREATE TABLE IF NOT EXISTS notification_logs (
+        id TEXT PRIMARY KEY,
+        ruleId TEXT NOT NULL,
+        domainIds TEXT, -- JSON格式存储相关域名ID列表
+        recipient TEXT NOT NULL,
+        subject TEXT NOT NULL,
+        status TEXT NOT NULL CHECK(status IN ('pending', 'sent', 'failed', 'retry')),
+        errorMessage TEXT,
+        sentAt TEXT,
+        retryCount INTEGER DEFAULT 0,
+        createdAt TEXT NOT NULL,
+        FOREIGN KEY (ruleId) REFERENCES notification_rules (id) ON DELETE CASCADE
+      )
+    `;
+
     return new Promise((resolve, reject) => {
       // 创建domains表
       this.db.run(createDomainsTableSQL, (err) => {
@@ -98,8 +320,51 @@ class DomainDatabase {
             }
             console.log('✅ domain_groups表创建成功');
             
-            // 创建默认分组
-            this.createDefaultGroups().then(resolve).catch(reject);
+            // 创建email_configs表
+            this.db.run(createEmailConfigsTableSQL, (err) => {
+              if (err) {
+                console.error('创建email_configs表失败:', err.message);
+                reject(err);
+                return;
+              }
+              console.log('✅ email_configs表创建成功');
+              
+              // 创建email_templates表
+              this.db.run(createEmailTemplatesTableSQL, (err) => {
+                if (err) {
+                  console.error('创建email_templates表失败:', err.message);
+                  reject(err);
+                  return;
+                }
+                console.log('✅ email_templates表创建成功');
+                
+                // 创建notification_rules表
+                this.db.run(createNotificationRulesTableSQL, (err) => {
+                  if (err) {
+                    console.error('创建notification_rules表失败:', err.message);
+                    reject(err);
+                    return;
+                  }
+                  console.log('✅ notification_rules表创建成功');
+                  
+                  // 创建notification_logs表
+                  this.db.run(createNotificationLogsTableSQL, (err) => {
+                    if (err) {
+                      console.error('创建notification_logs表失败:', err.message);
+                      reject(err);
+                      return;
+                    }
+                    console.log('✅ notification_logs表创建成功');
+                    
+                    // 创建默认分组和默认邮件配置
+                    this.createDefaultGroups()
+                      .then(() => this.createDefaultEmailTemplates())
+                      .then(resolve)
+                      .catch(reject);
+                  });
+                });
+              });
+            });
           });
         });
       });
@@ -152,6 +417,209 @@ class DomainDatabase {
         } else {
           if (this.changes > 0) {
             console.log(`✅ 默认分组"${name}"创建成功`);
+          }
+          resolve();
+        }
+      });
+    });
+  }
+
+  // 创建默认邮件模板
+  async createDefaultEmailTemplates() {
+    const defaultTemplates = [
+      {
+        id: 'reminder_zh_7days',
+        name: '7天到期提醒（中文）',
+        type: 'reminder',
+        language: 'zh',
+        subject: '域名到期提醒 - {{domain}} 将于 {{days}} 天后到期',
+        htmlContent: `
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <meta charset="utf-8">
+            <style>
+              .email-container { max-width: 600px; margin: 0 auto; font-family: Arial, sans-serif; }
+              .header { background: #3B82F6; color: white; padding: 20px; text-align: center; }
+              .content { padding: 20px; background: #f9fafb; }
+              .domain-info { background: white; padding: 15px; margin: 10px 0; border-radius: 6px; }
+              .warning { color: #EF4444; font-weight: bold; }
+            </style>
+          </head>
+          <body>
+            <div class="email-container">
+              <div class="header">
+                <h1>DomainFlow 域名到期提醒</h1>
+              </div>
+              <div class="content">
+                <p>您好，</p>
+                <p class="warning">您的域名即将到期，请及时续费！</p>
+                <div class="domain-info">
+                  <h3>域名信息</h3>
+                  <p><strong>域名:</strong> {{domain}}</p>
+                  <p><strong>注册商:</strong> {{registrar}}</p>
+                  <p><strong>到期时间:</strong> {{expiryDate}}</p>
+                  <p><strong>剩余天数:</strong> <span class="warning">{{days}} 天</span></p>
+                </div>
+                <p>请尽快登录注册商续费您的域名，避免业务中断。</p>
+              </div>
+            </div>
+          </body>
+          </html>
+        `,
+        textContent: '域名到期提醒\n\n您的域名 {{domain}} 将于 {{days}} 天后到期，请及时续费。\n\n域名信息：\n- 域名: {{domain}}\n- 注册商: {{registrar}}\n- 到期时间: {{expiryDate}}\n- 剩余天数: {{days}} 天',
+        variables: JSON.stringify(['domain', 'registrar', 'expiryDate', 'days']),
+        isDefault: true,
+        isActive: true
+      },
+      {
+        id: 'reminder_en_7days',
+        name: '7-Day Expiry Reminder (English)',
+        type: 'reminder',
+        language: 'en',
+        subject: 'Domain Expiry Notice - {{domain}} expires in {{days}} days',
+        htmlContent: `
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <meta charset="utf-8">
+            <style>
+              .email-container { max-width: 600px; margin: 0 auto; font-family: Arial, sans-serif; }
+              .header { background: #3B82F6; color: white; padding: 20px; text-align: center; }
+              .content { padding: 20px; background: #f9fafb; }
+              .domain-info { background: white; padding: 15px; margin: 10px 0; border-radius: 6px; }
+              .warning { color: #EF4444; font-weight: bold; }
+            </style>
+          </head>
+          <body>
+            <div class="email-container">
+              <div class="header">
+                <h1>DomainFlow Domain Expiry Notice</h1>
+              </div>
+              <div class="content">
+                <p>Hello,</p>
+                <p class="warning">Your domain is about to expire. Please renew it soon!</p>
+                <div class="domain-info">
+                  <h3>Domain Information</h3>
+                  <p><strong>Domain:</strong> {{domain}}</p>
+                  <p><strong>Registrar:</strong> {{registrar}}</p>
+                  <p><strong>Expiry Date:</strong> {{expiryDate}}</p>
+                  <p><strong>Days Remaining:</strong> <span class="warning">{{days}} days</span></p>
+                </div>
+                <p>Please login to your registrar to renew your domain as soon as possible.</p>
+              </div>
+            </div>
+          </body>
+          </html>
+        `,
+        textContent: 'Domain Expiry Notice\n\nYour domain {{domain}} expires in {{days}} days. Please renew it soon.\n\nDomain Information:\n- Domain: {{domain}}\n- Registrar: {{registrar}}\n- Expiry Date: {{expiryDate}}\n- Days Remaining: {{days}} days',
+        variables: JSON.stringify(['domain', 'registrar', 'expiryDate', 'days']),
+        isDefault: true,
+        isActive: true
+      },
+      {
+        id: 'summary_zh_daily',
+        name: '每日汇总报告（中文）',
+        type: 'summary',
+        language: 'zh',
+        subject: 'DomainFlow 域名监控日报 - {{date}}',
+        htmlContent: `
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <meta charset="utf-8">
+            <style>
+              .email-container { max-width: 600px; margin: 0 auto; font-family: Arial, sans-serif; }
+              .header { background: #3B82F6; color: white; padding: 20px; text-align: center; }
+              .content { padding: 20px; background: #f9fafb; }
+              .stats { display: flex; justify-content: space-around; margin: 20px 0; }
+              .stat-item { text-align: center; background: white; padding: 15px; border-radius: 6px; flex: 1; margin: 0 5px; }
+              .stat-number { font-size: 24px; font-weight: bold; color: #3B82F6; }
+              .domain-list { background: white; padding: 15px; margin: 10px 0; border-radius: 6px; }
+              .expiring { color: #EF4444; }
+              .expired { color: #DC2626; background: #FEE2E2; padding: 2px 6px; border-radius: 4px; }
+            </style>
+          </head>
+          <body>
+            <div class="email-container">
+              <div class="header">
+                <h1>DomainFlow 域名监控日报</h1>
+                <p>{{date}}</p>
+              </div>
+              <div class="content">
+                <div class="stats">
+                  <div class="stat-item">
+                    <div class="stat-number">{{totalDomains}}</div>
+                    <div>总域名数</div>
+                  </div>
+                  <div class="stat-item">
+                    <div class="stat-number expiring">{{expiringDomains}}</div>
+                    <div>即将到期</div>
+                  </div>
+                  <div class="stat-item">
+                    <div class="stat-number" style="color: #EF4444;">{{expiredDomains}}</div>
+                    <div>已过期</div>
+                  </div>
+                </div>
+                {{#if expiringSoon}}
+                <div class="domain-list">
+                  <h3>近期到期域名</h3>
+                  {{#each expiringSoon}}
+                  <p>• {{domain}} - 剩余 {{days}} 天</p>
+                  {{/each}}
+                </div>
+                {{/if}}
+                {{#if expiredDomains}}
+                <div class="domain-list">
+                  <h3>已过期域名</h3>
+                  {{#each expiredList}}
+                  <p class="expired">• {{domain}} - 已过期 {{days}} 天</p>
+                  {{/each}}
+                </div>
+                {{/if}}
+              </div>
+            </div>
+          </body>
+          </html>
+        `,
+        textContent: 'DomainFlow 域名监控日报 - {{date}}\n\n统计信息：\n- 总域名数: {{totalDomains}}\n- 即将到期: {{expiringDomains}}\n- 已过期: {{expiredDomains}}\n\n{{#if expiringSoon}}近期到期域名：\n{{#each expiringSoon}}• {{domain}} - 剩余 {{days}} 天\n{{/each}}{{/if}}',
+        variables: JSON.stringify(['date', 'totalDomains', 'expiringDomains', 'expiredDomains', 'expiringSoon', 'expiredList']),
+        isDefault: true,
+        isActive: true
+      }
+    ];
+
+    for (const template of defaultTemplates) {
+      await this.addEmailTemplateIfNotExists(template);
+    }
+  }
+
+  // 添加邮件模板（如果不存在）
+  async addEmailTemplateIfNotExists(templateData) {
+    const {
+      id, name, type, language, subject, htmlContent, textContent,
+      variables, isDefault, isActive
+    } = templateData;
+    const now = new Date().toISOString();
+
+    const insertSQL = `
+      INSERT OR IGNORE INTO email_templates (
+        id, name, type, language, subject, htmlContent, textContent,
+        variables, isDefault, isActive, createdAt, updatedAt
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `;
+
+    return new Promise((resolve, reject) => {
+      this.db.run(insertSQL, [
+        id, name, type, language, subject, htmlContent, textContent,
+        variables, isDefault ? 1 : 0, isActive ? 1 : 0, now, now
+      ], function(err) {
+        if (err) {
+          console.error('创建默认邮件模板失败:', err.message);
+          reject(err);
+        } else {
+          if (this.changes > 0) {
+            console.log(`✅ 默认邮件模板"${name}"创建成功`);
           }
           resolve();
         }
@@ -672,6 +1140,735 @@ class DomainDatabase {
       } else {
         resolve();
       }
+    });
+  }
+
+  // ===============================
+  // 邮件配置相关操作
+  // ===============================
+
+  // 获取所有邮件配置
+  async getAllEmailConfigs() {
+    const sql = `SELECT * FROM email_configs ORDER BY isDefault DESC, createdAt ASC`;
+    
+    return new Promise((resolve, reject) => {
+      this.db.all(sql, [], (err, rows) => {
+        if (err) {
+          reject(err);
+        } else {
+          // 将boolean字段转换为真正的boolean值
+          const configs = rows.map(row => ({
+            ...row,
+            secure: Boolean(row.secure),
+            isDefault: Boolean(row.isDefault),
+            isActive: Boolean(row.isActive)
+          }));
+          resolve(configs);
+        }
+      });
+    });
+  }
+
+  // 根据ID获取邮件配置
+  async getEmailConfigById(id) {
+    const sql = `SELECT * FROM email_configs WHERE id = ?`;
+    
+    return new Promise((resolve, reject) => {
+      this.db.get(sql, [id], (err, row) => {
+        if (err) {
+          reject(err);
+        } else if (!row) {
+          resolve(null);
+        } else {
+          resolve({
+            ...row,
+            secure: Boolean(row.secure),
+            isDefault: Boolean(row.isDefault),
+            isActive: Boolean(row.isActive)
+          });
+        }
+      });
+    });
+  }
+
+  // 添加邮件配置
+  async addEmailConfig(configData) {
+    const {
+      id, name, host, port, secure, username, password,
+      fromEmail, fromName, isDefault, isActive
+    } = configData;
+    const now = new Date().toISOString();
+
+    // 如果设置为默认配置，先取消其他配置的默认状态
+    if (isDefault) {
+      await this.unsetDefaultEmailConfig();
+    }
+
+    const insertSQL = `
+      INSERT INTO email_configs (
+        id, name, host, port, secure, username, password,
+        fromEmail, fromName, isDefault, isActive, createdAt, updatedAt
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `;
+
+    return new Promise((resolve, reject) => {
+      this.db.run(insertSQL, [
+        id, name, host, port, secure ? 1 : 0, username, password,
+        fromEmail, fromName, isDefault ? 1 : 0, isActive ? 1 : 0, now, now
+      ], function(err) {
+        if (err) {
+          reject(err);
+        } else {
+          resolve({ ...configData, createdAt: now, updatedAt: now });
+        }
+      });
+    });
+  }
+
+  // 更新邮件配置
+  async updateEmailConfig(id, updateData) {
+    const { isDefault } = updateData;
+    const now = new Date().toISOString();
+
+    // 如果设置为默认配置，先取消其他配置的默认状态
+    if (isDefault) {
+      await this.unsetDefaultEmailConfig();
+    }
+
+    const setClause = [];
+    const params = [];
+
+    Object.keys(updateData).forEach(key => {
+      if (key !== 'id') {
+        setClause.push(`${key} = ?`);
+        if (key === 'secure' || key === 'isDefault' || key === 'isActive') {
+          params.push(updateData[key] ? 1 : 0);
+        } else {
+          params.push(updateData[key]);
+        }
+      }
+    });
+
+    setClause.push('updatedAt = ?');
+    params.push(now, id);
+
+    const updateSQL = `UPDATE email_configs SET ${setClause.join(', ')} WHERE id = ?`;
+
+    return new Promise((resolve, reject) => {
+      this.db.run(updateSQL, params, function(err) {
+        if (err) {
+          reject(err);
+        } else if (this.changes === 0) {
+          reject(new Error('邮件配置不存在'));
+        } else {
+          resolve({ success: true });
+        }
+      });
+    });
+  }
+
+  // 删除邮件配置
+  async deleteEmailConfig(id) {
+    const deleteSQL = `DELETE FROM email_configs WHERE id = ?`;
+
+    return new Promise((resolve, reject) => {
+      this.db.run(deleteSQL, [id], function(err) {
+        if (err) {
+          reject(err);
+        } else if (this.changes === 0) {
+          reject(new Error('邮件配置不存在'));
+        } else {
+          resolve({ success: true, deletedCount: this.changes });
+        }
+      });
+    });
+  }
+
+  // 取消所有配置的默认状态
+  async unsetDefaultEmailConfig() {
+    const updateSQL = `UPDATE email_configs SET isDefault = 0`;
+    
+    return new Promise((resolve, reject) => {
+      this.db.run(updateSQL, [], (err) => {
+        if (err) {
+          reject(err);
+        } else {
+          resolve();
+        }
+      });
+    });
+  }
+
+  // 获取默认邮件配置
+  async getDefaultEmailConfig() {
+    const sql = `SELECT * FROM email_configs WHERE isDefault = 1 AND isActive = 1 LIMIT 1`;
+    
+    return new Promise((resolve, reject) => {
+      this.db.get(sql, [], (err, row) => {
+        if (err) {
+          reject(err);
+        } else if (!row) {
+          resolve(null);
+        } else {
+          resolve({
+            ...row,
+            secure: Boolean(row.secure),
+            isDefault: Boolean(row.isDefault),
+            isActive: Boolean(row.isActive)
+          });
+        }
+      });
+    });
+  }
+
+  // ===============================
+  // 邮件模板相关操作
+  // ===============================
+
+  // 获取所有邮件模板
+  async getAllEmailTemplates() {
+    const sql = `
+      SELECT * FROM email_templates 
+      ORDER BY isDefault DESC, type, language, createdAt ASC
+    `;
+    
+    return new Promise((resolve, reject) => {
+      this.db.all(sql, [], (err, rows) => {
+        if (err) {
+          reject(err);
+        } else {
+          const templates = rows.map(row => ({
+            ...row,
+            isDefault: Boolean(row.isDefault),
+            isActive: Boolean(row.isActive),
+            variables: row.variables ? JSON.parse(row.variables) : []
+          }));
+          resolve(templates);
+        }
+      });
+    });
+  }
+
+  // 根据类型和语言获取邮件模板
+  async getEmailTemplatesByTypeAndLanguage(type, language) {
+    const sql = `
+      SELECT * FROM email_templates 
+      WHERE type = ? AND language = ? AND isActive = 1
+      ORDER BY isDefault DESC, createdAt ASC
+    `;
+    
+    return new Promise((resolve, reject) => {
+      this.db.all(sql, [type, language], (err, rows) => {
+        if (err) {
+          reject(err);
+        } else {
+          const templates = rows.map(row => ({
+            ...row,
+            isDefault: Boolean(row.isDefault),
+            isActive: Boolean(row.isActive),
+            variables: row.variables ? JSON.parse(row.variables) : []
+          }));
+          resolve(templates);
+        }
+      });
+    });
+  }
+
+  // 根据ID获取邮件模板
+  async getEmailTemplateById(id) {
+    const sql = `SELECT * FROM email_templates WHERE id = ?`;
+    
+    return new Promise((resolve, reject) => {
+      this.db.get(sql, [id], (err, row) => {
+        if (err) {
+          reject(err);
+        } else if (!row) {
+          resolve(null);
+        } else {
+          resolve({
+            ...row,
+            isDefault: Boolean(row.isDefault),
+            isActive: Boolean(row.isActive),
+            variables: row.variables ? JSON.parse(row.variables) : []
+          });
+        }
+      });
+    });
+  }
+
+  // 添加邮件模板
+  async addEmailTemplate(templateData) {
+    const {
+      id, name, type, language, subject, htmlContent, textContent,
+      variables, isDefault, isActive
+    } = templateData;
+    const now = new Date().toISOString();
+
+    const insertSQL = `
+      INSERT INTO email_templates (
+        id, name, type, language, subject, htmlContent, textContent,
+        variables, isDefault, isActive, createdAt, updatedAt
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `;
+
+    return new Promise((resolve, reject) => {
+      this.db.run(insertSQL, [
+        id, name, type, language, subject, htmlContent, textContent,
+        JSON.stringify(variables || []), isDefault ? 1 : 0, isActive ? 1 : 0, now, now
+      ], function(err) {
+        if (err) {
+          reject(err);
+        } else {
+          resolve({ ...templateData, createdAt: now, updatedAt: now });
+        }
+      });
+    });
+  }
+
+  // 更新邮件模板
+  async updateEmailTemplate(id, updateData) {
+    const now = new Date().toISOString();
+
+    const setClause = [];
+    const params = [];
+
+    Object.keys(updateData).forEach(key => {
+      if (key !== 'id') {
+        setClause.push(`${key} = ?`);
+        if (key === 'variables') {
+          params.push(JSON.stringify(updateData[key] || []));
+        } else if (key === 'isDefault' || key === 'isActive') {
+          params.push(updateData[key] ? 1 : 0);
+        } else {
+          params.push(updateData[key]);
+        }
+      }
+    });
+
+    setClause.push('updatedAt = ?');
+    params.push(now, id);
+
+    const updateSQL = `UPDATE email_templates SET ${setClause.join(', ')} WHERE id = ?`;
+
+    return new Promise((resolve, reject) => {
+      this.db.run(updateSQL, params, function(err) {
+        if (err) {
+          reject(err);
+        } else if (this.changes === 0) {
+          reject(new Error('邮件模板不存在'));
+        } else {
+          resolve({ success: true });
+        }
+      });
+    });
+  }
+
+  // 删除邮件模板
+  async deleteEmailTemplate(id) {
+    const deleteSQL = `DELETE FROM email_templates WHERE id = ?`;
+
+    return new Promise((resolve, reject) => {
+      this.db.run(deleteSQL, [id], function(err) {
+        if (err) {
+          reject(err);
+        } else if (this.changes === 0) {
+          reject(new Error('邮件模板不存在'));
+        } else {
+          resolve({ success: true, deletedCount: this.changes });
+        }
+      });
+    });
+  }
+
+  // ===============================
+  // 通知规则相关操作
+  // ===============================
+
+  // 获取所有通知规则
+  async getAllNotificationRules() {
+    const sql = `
+      SELECT nr.*, ec.name as emailConfigName, et.name as templateName
+      FROM notification_rules nr
+      LEFT JOIN email_configs ec ON nr.emailConfigId = ec.id
+      LEFT JOIN email_templates et ON nr.templateId = et.id
+      ORDER BY nr.isActive DESC, nr.createdAt ASC
+    `;
+    
+    return new Promise((resolve, reject) => {
+      this.db.all(sql, [], (err, rows) => {
+        if (err) {
+          reject(err);
+        } else {
+          const rules = rows.map(row => ({
+            ...row,
+            isActive: Boolean(row.isActive),
+            recipients: row.recipients ? JSON.parse(row.recipients) : []
+          }));
+          resolve(rules);
+        }
+      });
+    });
+  }
+
+  // 根据ID获取通知规则
+  async getNotificationRuleById(id) {
+    const sql = `
+      SELECT nr.*, ec.name as emailConfigName, et.name as templateName
+      FROM notification_rules nr
+      LEFT JOIN email_configs ec ON nr.emailConfigId = ec.id
+      LEFT JOIN email_templates et ON nr.templateId = et.id
+      WHERE nr.id = ?
+    `;
+    
+    return new Promise((resolve, reject) => {
+      this.db.get(sql, [id], (err, row) => {
+        if (err) {
+          reject(err);
+        } else if (!row) {
+          resolve(null);
+        } else {
+          resolve({
+            ...row,
+            isActive: Boolean(row.isActive),
+            recipients: row.recipients ? JSON.parse(row.recipients) : []
+          });
+        }
+      });
+    });
+  }
+
+  // 添加通知规则
+  async addNotificationRule(ruleData) {
+    const {
+      id, name, type, days, scheduleHour, scheduleMinute, scheduleWeekday,
+      isActive, emailConfigId, templateId, recipients
+    } = ruleData;
+    const now = new Date().toISOString();
+
+    // 生成cron表达式
+    const cronExpression = this.generateCronExpression(type, scheduleHour, scheduleMinute, scheduleWeekday);
+
+    const insertSQL = `
+      INSERT INTO notification_rules (
+        id, name, type, days, scheduleHour, scheduleMinute, scheduleWeekday,
+        cronExpression, isActive, emailConfigId, templateId,
+        recipients, runCount, createdAt, updatedAt
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
+    `;
+
+    return new Promise((resolve, reject) => {
+      this.db.run(insertSQL, [
+        id, name, type, days || null, scheduleHour || 8, scheduleMinute || 0, 
+        scheduleWeekday || null, cronExpression, isActive ? 1 : 0, 
+        emailConfigId, templateId, JSON.stringify(recipients || []), now, now
+      ], function(err) {
+        if (err) {
+          reject(err);
+        } else {
+          resolve({ 
+            ...ruleData, 
+            cronExpression,
+            runCount: 0, 
+            createdAt: now, 
+            updatedAt: now 
+          });
+        }
+      });
+    });
+  }
+
+  // 更新通知规则
+  async updateNotificationRule(id, updates) {
+    // 生成新的cron表达式
+    let cronExpression = null;
+    if (updates.type || updates.scheduleHour !== undefined || 
+        updates.scheduleMinute !== undefined || updates.scheduleWeekday !== undefined) {
+      
+      // 先获取当前规则
+      return new Promise((resolve, reject) => {
+        this.db.get(
+          'SELECT * FROM notification_rules WHERE id = ?', 
+          [id], 
+          (err, currentRule) => {
+            if (err) {
+              reject(err);
+              return;
+            }
+            if (!currentRule) {
+              reject(new Error('通知规则不存在'));
+              return;
+            }
+
+            // 合并更新数据
+            const mergedData = {
+              type: updates.type || currentRule.type,
+              scheduleHour: updates.scheduleHour !== undefined ? updates.scheduleHour : currentRule.scheduleHour,
+              scheduleMinute: updates.scheduleMinute !== undefined ? updates.scheduleMinute : currentRule.scheduleMinute,
+              scheduleWeekday: updates.scheduleWeekday !== undefined ? updates.scheduleWeekday : currentRule.scheduleWeekday
+            };
+
+            // 生成新的cron表达式
+            cronExpression = this.generateCronExpression(
+              mergedData.type,
+              mergedData.scheduleHour,
+              mergedData.scheduleMinute,
+              mergedData.scheduleWeekday
+            );
+
+            // 执行更新
+            this.performUpdate(id, updates, cronExpression, resolve, reject);
+          }
+        );
+      });
+    } else {
+      // 直接更新，不需要重新生成cron表达式
+      return new Promise((resolve, reject) => {
+        this.performUpdate(id, updates, null, resolve, reject);
+      });
+    }
+  }
+
+  // 执行更新操作
+  performUpdate(id, updates, cronExpression, resolve, reject) {
+    const fields = [];
+    const values = [];
+
+    // 构建更新字段
+    const updateableFields = [
+      'name', 'type', 'days', 'scheduleHour', 'scheduleMinute', 
+      'scheduleWeekday', 'isActive', 'emailConfigId', 'templateId', 'recipients'
+    ];
+
+    updateableFields.forEach(field => {
+      if (updates[field] !== undefined) {
+        fields.push(`${field} = ?`);
+        if (field === 'recipients') {
+          values.push(JSON.stringify(updates[field]));
+        } else if (field === 'isActive') {
+          values.push(updates[field] ? 1 : 0);
+        } else {
+          values.push(updates[field]);
+        }
+      }
+    });
+
+    // 如果有新的cron表达式，也要更新
+    if (cronExpression) {
+      fields.push('cronExpression = ?');
+      values.push(cronExpression);
+    }
+
+    // 更新时间
+    fields.push('updatedAt = ?');
+    values.push(new Date().toISOString());
+
+    if (fields.length === 1) { // 只有updatedAt
+      resolve();
+      return;
+    }
+
+    const updateSQL = `UPDATE notification_rules SET ${fields.join(', ')} WHERE id = ?`;
+    values.push(id);
+
+    this.db.run(updateSQL, values, function(err) {
+      if (err) {
+        console.error('更新通知规则失败:', err);
+        reject(err);
+      } else {
+        resolve();
+      }
+    });
+  }
+
+  // 生成cron表达式
+  generateCronExpression(type, hour = 8, minute = 0, weekday = 1) {
+    // 验证参数范围
+    hour = Math.max(0, Math.min(23, hour));
+    minute = Math.max(0, Math.min(59, minute));
+    weekday = Math.max(0, Math.min(6, weekday));
+
+    switch (type) {
+      case 'daily_summary':
+        // 每日在指定时间发送
+        return `${minute} ${hour} * * *`;
+      
+      case 'weekly_summary':
+        // 每周在指定星期的指定时间发送
+        return `${minute} ${hour} * * ${weekday}`;
+      
+      case 'expiry_reminder':
+        // 到期提醒每天在指定时间检查
+        return `${minute} ${hour} * * *`;
+      
+      default:
+        // 默认每天8点
+        return `0 8 * * *`;
+    }
+  }
+
+  // 删除通知规则
+  async deleteNotificationRule(id) {
+    const deleteSQL = `DELETE FROM notification_rules WHERE id = ?`;
+
+    return new Promise((resolve, reject) => {
+      this.db.run(deleteSQL, [id], function(err) {
+        if (err) {
+          reject(err);
+        } else if (this.changes === 0) {
+          reject(new Error('通知规则不存在'));
+        } else {
+          resolve({ success: true, deletedCount: this.changes });
+        }
+      });
+    });
+  }
+
+  // 获取活跃的通知规则
+  async getActiveNotificationRules() {
+    const sql = `
+      SELECT nr.*, ec.name as emailConfigName, et.name as templateName
+      FROM notification_rules nr
+      LEFT JOIN email_configs ec ON nr.emailConfigId = ec.id
+      LEFT JOIN email_templates et ON nr.templateId = et.id
+      WHERE nr.isActive = 1
+      ORDER BY nr.type, nr.days
+    `;
+    
+    return new Promise((resolve, reject) => {
+      this.db.all(sql, [], (err, rows) => {
+        if (err) {
+          reject(err);
+        } else {
+          const rules = rows.map(row => ({
+            ...row,
+            isActive: Boolean(row.isActive),
+            recipients: row.recipients ? JSON.parse(row.recipients) : []
+          }));
+          resolve(rules);
+        }
+      });
+    });
+  }
+
+  // 更新通知规则的运行信息
+  async updateNotificationRuleRunInfo(id, lastRun, nextRun) {
+    const now = new Date().toISOString();
+    const updateSQL = `
+      UPDATE notification_rules 
+      SET lastRun = ?, nextRun = ?, runCount = runCount + 1, updatedAt = ?
+      WHERE id = ?
+    `;
+
+    return new Promise((resolve, reject) => {
+      this.db.run(updateSQL, [lastRun, nextRun, now, id], function(err) {
+        if (err) {
+          reject(err);
+        } else {
+          resolve({ success: true });
+        }
+      });
+    });
+  }
+
+  // ===============================
+  // 通知记录相关操作
+  // ===============================
+
+  // 获取通知记录
+  async getNotificationLogs(limit = 100, offset = 0) {
+    const sql = `
+      SELECT nl.*, nr.name as ruleName, nr.type as ruleType
+      FROM notification_logs nl
+      LEFT JOIN notification_rules nr ON nl.ruleId = nr.id
+      ORDER BY nl.createdAt DESC
+      LIMIT ? OFFSET ?
+    `;
+    
+    return new Promise((resolve, reject) => {
+      this.db.all(sql, [limit, offset], (err, rows) => {
+        if (err) {
+          reject(err);
+        } else {
+          const logs = rows.map(row => ({
+            ...row,
+            domainIds: row.domainIds ? JSON.parse(row.domainIds) : []
+          }));
+          resolve(logs);
+        }
+      });
+    });
+  }
+
+  // 添加通知记录
+  async addNotificationLog(logData) {
+    const {
+      id, ruleId, domainIds, recipient, subject, status, errorMessage, sentAt, retryCount
+    } = logData;
+    const now = new Date().toISOString();
+
+    const insertSQL = `
+      INSERT INTO notification_logs (
+        id, ruleId, domainIds, recipient, subject, status,
+        errorMessage, sentAt, retryCount, createdAt
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `;
+
+    return new Promise((resolve, reject) => {
+      this.db.run(insertSQL, [
+        id, ruleId, JSON.stringify(domainIds || []), recipient, subject,
+        status, errorMessage, sentAt, retryCount || 0, now
+      ], function(err) {
+        if (err) {
+          reject(err);
+        } else {
+          resolve({ ...logData, createdAt: now });
+        }
+      });
+    });
+  }
+
+  // 更新通知记录状态
+  async updateNotificationLogStatus(id, status, errorMessage = null, sentAt = null) {
+    const updateSQL = `
+      UPDATE notification_logs 
+      SET status = ?, errorMessage = ?, sentAt = ?, 
+          retryCount = CASE WHEN status = 'retry' THEN retryCount + 1 ELSE retryCount END
+      WHERE id = ?
+    `;
+
+    return new Promise((resolve, reject) => {
+      this.db.run(updateSQL, [status, errorMessage, sentAt, id], function(err) {
+        if (err) {
+          reject(err);
+        } else if (this.changes === 0) {
+          reject(new Error('通知记录不存在'));
+        } else {
+          resolve({ success: true });
+        }
+      });
+    });
+  }
+
+  // 获取失败的通知记录（用于重试）
+  async getFailedNotificationLogs(retryLimit = 3) {
+    const sql = `
+      SELECT * FROM notification_logs 
+      WHERE status IN ('failed', 'retry') AND retryCount < ?
+      ORDER BY createdAt ASC
+    `;
+    
+    return new Promise((resolve, reject) => {
+      this.db.all(sql, [retryLimit], (err, rows) => {
+        if (err) {
+          reject(err);
+        } else {
+          const logs = rows.map(row => ({
+            ...row,
+            domainIds: row.domainIds ? JSON.parse(row.domainIds) : []
+          }));
+          resolve(logs);
+        }
+      });
     });
   }
 }
