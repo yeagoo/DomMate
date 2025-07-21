@@ -1,11 +1,10 @@
 ---
 import Layout from '../layouts/Layout.astro';
-import Dashboard from '../components/Dashboard.tsx';
-import { ThemeToggle } from '../components/ThemeToggle.tsx';
+import DashboardWithAuth from '../components/DashboardWithAuth.tsx';
 ---
 
 <Layout title="DomainFlow - 域名监控平台">
-  <Dashboard client:load />
+  <DashboardWithAuth client:load language="zh" />
 </Layout>
 
 <script>

@@ -13,6 +13,7 @@ import exportService from './exportService.js';
 import scheduledExportService from './scheduledExport.js';
 import emailService from './emailService.js';
 import cronScheduler from './cronScheduler.js';
+import authService from './authService.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -82,6 +83,166 @@ async function whoisWithRetry(domain, maxRetries = 3, timeout = 15000) {
 // 中间件
 app.use(cors());
 app.use(express.json());
+
+// ========== 认证相关 API ==========
+
+// 获取登录信息（检查是否需要验证码等）
+app.get('/api/auth/info', async (req, res) => {
+  try {
+    const ipAddress = req.ip || req.connection.remoteAddress || '127.0.0.1';
+    const info = await authService.getLoginInfo(ipAddress);
+    res.json({
+      success: true,
+      ...info
+    });
+  } catch (error) {
+    console.error('获取登录信息失败:', error);
+    res.status(500).json({
+      success: false,
+      message: '获取登录信息失败'
+    });
+  }
+});
+
+// 用户登录
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { password, captcha, captchaId } = req.body;
+    const ipAddress = req.ip || req.connection.remoteAddress || '127.0.0.1';
+    const userAgent = req.headers['user-agent'] || '';
+
+    if (!password) {
+      return res.status(400).json({
+        success: false,
+        message: '密码不能为空'
+      });
+    }
+
+    const result = await authService.login(password, captcha, captchaId, ipAddress, userAgent);
+    
+    if (result.success) {
+      // 设置会话Cookie（可选）
+      res.cookie('sessionId', result.sessionId, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        maxAge: 24 * 60 * 60 * 1000 // 24小时
+      });
+    }
+
+    res.json(result);
+  } catch (error) {
+    console.error('登录失败:', error);
+    res.status(500).json({
+      success: false,
+      message: '登录过程中发生错误'
+    });
+  }
+});
+
+// 用户登出
+app.post('/api/auth/logout', async (req, res) => {
+  try {
+    const sessionId = req.headers['x-session-id'] || req.cookies?.sessionId;
+    const result = await authService.logout(sessionId);
+    
+    // 清除Cookie
+    res.clearCookie('sessionId');
+    
+    res.json(result);
+  } catch (error) {
+    console.error('登出失败:', error);
+    res.status(500).json({
+      success: false,
+      message: '登出过程中发生错误'
+    });
+  }
+});
+
+// 修改密码
+app.post('/api/auth/change-password', async (req, res) => {
+  try {
+    const { oldPassword, newPassword } = req.body;
+    const sessionId = req.headers['x-session-id'] || req.cookies?.sessionId;
+
+    if (!oldPassword || !newPassword) {
+      return res.status(400).json({
+        success: false,
+        message: '原密码和新密码不能为空'
+      });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({
+        success: false,
+        message: '新密码长度不能少于6位'
+      });
+    }
+
+    const result = await authService.changePassword(oldPassword, newPassword, sessionId);
+    res.json(result);
+  } catch (error) {
+    console.error('修改密码失败:', error);
+    res.status(500).json({
+      success: false,
+      message: '修改密码过程中发生错误'
+    });
+  }
+});
+
+// 验证会话状态
+app.get('/api/auth/session', async (req, res) => {
+  try {
+    const sessionId = req.headers['x-session-id'] || req.cookies?.sessionId;
+    const session = await authService.validateSession(sessionId);
+    
+    if (session) {
+      res.json({
+        success: true,
+        valid: true,
+        session: {
+          id: session.session_id,
+          expiresAt: session.expires_at,
+          lastActivity: session.last_activity
+        }
+      });
+    } else {
+      res.json({
+        success: true,
+        valid: false
+      });
+    }
+  } catch (error) {
+    console.error('验证会话失败:', error);
+    res.status(500).json({
+      success: false,
+      message: '验证会话失败'
+    });
+  }
+});
+
+// 获取新的验证码
+app.get('/api/auth/captcha', (req, res) => {
+  try {
+    const captcha = authService.generateCaptchaForClient();
+    res.json({
+      success: true,
+      captcha
+    });
+  } catch (error) {
+    console.error('生成验证码失败:', error);
+    res.status(500).json({
+      success: false,
+      message: '生成验证码失败'
+    });
+  }
+});
+
+// 应用认证中间件到所有API路由（除了认证相关的）
+app.use('/api', (req, res, next) => {
+  authService.authenticateRequest(req, res, next);
+});
+
+// ========== 域名相关 API ==========
 
 // 清理和转换域名状态
 function cleanDomainStatus(rawStatus) {
@@ -479,7 +640,8 @@ app.post('/api/domains/import', async (req, res) => {
         domainStatus: whoisData.status || null,
         status: whoisData.domainStatus,
         lastCheck: now,
-        notifications: true,
+        isImportant: false,
+        notes: null,
         createdAt: now,
         updatedAt: now
       };
@@ -535,7 +697,6 @@ app.get('/api/domains', async (req, res) => {
     domainStatus: domain.domainStatus,
     status: domain.status,
     lastCheck: domain.lastCheck ? new Date(domain.lastCheck) : null,
-    notifications: Boolean(domain.notifications),
     isImportant: Boolean(domain.isImportant),
     notes: domain.notes || null,
     createdAt: new Date(domain.createdAt),
@@ -547,23 +708,6 @@ app.get('/api/domains', async (req, res) => {
   });
   
   res.json(formatted);
-});
-
-app.patch('/api/domains/:id/notifications', async (req, res) => {
-  const { id } = req.params;
-  const { notifications } = req.body;
-  
-  const domain = await db.getDomainById(id);
-  
-  if (!domain) {
-    return res.status(404).json({ error: '域名未找到' });
-  }
-  
-  await db.updateDomain(id, {
-    notifications: Boolean(notifications)
-  });
-  
-  res.json({ success: true });
 });
 
 app.post('/api/domains/:id/refresh', async (req, res) => {
@@ -1051,7 +1195,8 @@ app.get('/api/groups/:id/domains', async (req, res) => {
       domainStatus: domain.domainStatus,
       status: domain.status,
       lastCheck: domain.lastCheck ? new Date(domain.lastCheck) : null,
-      notifications: Boolean(domain.notifications),
+      isImportant: Boolean(domain.isImportant),
+      notes: domain.notes || null,
       createdAt: new Date(domain.createdAt),
       updatedAt: new Date(domain.updatedAt)
     }));
@@ -1077,7 +1222,8 @@ app.get('/api/groups/ungrouped/domains', async (req, res) => {
       domainStatus: domain.domainStatus,
       status: domain.status,
       lastCheck: domain.lastCheck ? new Date(domain.lastCheck) : null,
-      notifications: Boolean(domain.notifications),
+      isImportant: Boolean(domain.isImportant),
+      notes: domain.notes || null,
       createdAt: new Date(domain.createdAt),
       updatedAt: new Date(domain.updatedAt)
     }));
@@ -2075,4 +2221,30 @@ app.get('/api/export/fields', (req, res) => {
   const language = req.query.language || 'zh';
   const fields = exportService.getAvailableFields(language);
   res.json({ fields });
+});
+
+// 更新域名备注
+app.patch('/api/domains/:id/notes', async (req, res) => {
+  const { id } = req.params;
+  const { notes } = req.body;
+  
+  try {
+    const domain = await db.getDomainById(id);
+    
+    if (!domain) {
+      return res.status(404).json({ error: '域名未找到' });
+    }
+    
+    await db.updateDomain(id, {
+      notes: notes || null
+    });
+    
+    res.json({ 
+      success: true, 
+      message: notes ? '备注更新成功' : '备注清空成功'
+    });
+  } catch (error) {
+    console.error('更新域名备注失败:', error);
+    res.status(500).json({ error: '更新备注失败: ' + error.message });
+  }
 });

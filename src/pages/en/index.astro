@@ -1,10 +1,10 @@
 ---
 import LayoutEn from '../../layouts/LayoutEn.astro';
-import DashboardEn from '../../components/DashboardEn.tsx';
+import DashboardEnWithAuth from '../../components/DashboardEnWithAuth.tsx';
 ---
 
 <LayoutEn title="DomainFlow - Domain Monitoring Platform">
-  <DashboardEn client:load />
+  <DashboardEnWithAuth client:load language="en" />
 </LayoutEn>
 
 <script>

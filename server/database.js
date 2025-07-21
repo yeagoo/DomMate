@@ -32,6 +32,9 @@ class DomainDatabase {
               // 迁移数据库表结构（添加新字段）
               await this.migrateDatabase();
               
+              // 初始化认证配置
+              await this.initializeAuthConfig();
+              
               resolve();
             } catch (error) {
               console.error('数据库初始化失败:', error);
@@ -202,7 +205,6 @@ class DomainDatabase {
         domainStatus TEXT,
         status TEXT DEFAULT 'normal' CHECK(status IN ('normal', 'expiring', 'expired', 'failed', 'unregistered')),
         lastCheck TEXT,
-        notifications BOOLEAN DEFAULT 1,
         isImportant BOOLEAN DEFAULT 0,
         notes TEXT,
         createdAt TEXT NOT NULL,
@@ -311,6 +313,59 @@ class DomainDatabase {
         FOREIGN KEY (ruleId) REFERENCES notification_rules (id) ON DELETE CASCADE
       )
     `;
+
+    // 认证配置表 - 存储访问密码等配置
+    this.db.run(`
+      CREATE TABLE IF NOT EXISTS auth_config (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        key TEXT UNIQUE NOT NULL,
+        value TEXT NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `, (err) => {
+      if (err) {
+        console.error('❌ auth_config表创建失败:', err.message);
+      } else {
+        console.log('✅ auth_config表创建成功');
+      }
+    });
+
+    // 会话表 - 存储用户登录会话
+    this.db.run(`
+      CREATE TABLE IF NOT EXISTS auth_sessions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        session_id TEXT UNIQUE NOT NULL,
+        ip_address TEXT NOT NULL,
+        user_agent TEXT,
+        expires_at DATETIME NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        last_activity DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `, (err) => {
+      if (err) {
+        console.error('❌ auth_sessions表创建失败:', err.message);
+      } else {
+        console.log('✅ auth_sessions表创建成功');
+      }
+    });
+
+    // 登录尝试记录表 - 防暴力破解
+    this.db.run(`
+      CREATE TABLE IF NOT EXISTS login_attempts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        ip_address TEXT NOT NULL,
+        success BOOLEAN NOT NULL DEFAULT 0,
+        captcha_required BOOLEAN NOT NULL DEFAULT 0,
+        attempt_time DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `, (err) => {
+      if (err) {
+        console.error('❌ login_attempts表创建失败:', err.message);
+      } else {
+        console.log('✅ login_attempts表创建成功');
+      }
+    });
 
     return new Promise((resolve, reject) => {
       // 创建domains表
@@ -658,7 +713,8 @@ class DomainDatabase {
       domainStatus,
       status,
       lastCheck,
-      notifications,
+      isImportant,
+      notes,
       createdAt,
       updatedAt
     } = domainData;
@@ -666,14 +722,14 @@ class DomainDatabase {
     const insertSQL = `
       INSERT INTO domains (
         id, domain, registrar, expiresAt, dnsProvider, domainStatus, 
-        status, lastCheck, notifications, createdAt, updatedAt
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        status, lastCheck, isImportant, notes, createdAt, updatedAt
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
 
     return new Promise((resolve, reject) => {
       this.db.run(insertSQL, [
         id, domain, registrar, expiresAt, dnsProvider, domainStatus,
-        status, lastCheck, notifications ? 1 : 0, createdAt, updatedAt
+        status, lastCheck, isImportant ? 1 : 0, notes || null, createdAt, updatedAt
       ], function(err) {
         if (err) {
           console.error('添加域名失败:', err.message);
@@ -699,7 +755,6 @@ class DomainDatabase {
           // 转换数据类型
           const domains = rows.map(row => ({
             ...row,
-            notifications: Boolean(row.notifications),
             isImportant: Boolean(row.isImportant),
             notes: row.notes || null,
             expiresAt: row.expiresAt || null,
@@ -722,7 +777,6 @@ class DomainDatabase {
         } else if (row) {
           resolve({
             ...row,
-            notifications: Boolean(row.notifications),
             isImportant: Boolean(row.isImportant),
             notes: row.notes || null
           });
@@ -744,7 +798,8 @@ class DomainDatabase {
         } else if (row) {
           resolve({
             ...row,
-            notifications: Boolean(row.notifications)
+            isImportant: Boolean(row.isImportant),
+            notes: row.notes || null
           });
         } else {
           resolve(null);
@@ -762,7 +817,7 @@ class DomainDatabase {
     for (const [key, value] of Object.entries(updateData)) {
       if (key !== 'id') {
         fields.push(`${key} = ?`);
-        if (key === 'notifications') {
+        if (key === 'isImportant') {
           values.push(value ? 1 : 0);
         } else {
           values.push(value);
@@ -1094,7 +1149,8 @@ class DomainDatabase {
         } else {
           const domains = rows.map(row => ({
             ...row,
-            notifications: Boolean(row.notifications)
+            isImportant: Boolean(row.isImportant),
+            notes: row.notes || null
           }));
           resolve(domains);
         }
@@ -2085,6 +2141,207 @@ class DomainDatabase {
       '7月', '8月', '9月', '10月', '11月', '12月'
     ];
     return `${year}年${monthNames[parseInt(month) - 1]}`;
+  }
+
+  // ========== 认证相关方法 ==========
+
+  // 获取或设置访问密码
+  async setAuthConfig(key, value) {
+    const sql = `
+      INSERT OR REPLACE INTO auth_config (key, value, updated_at)
+      VALUES (?, ?, CURRENT_TIMESTAMP)
+    `;
+    
+    return new Promise((resolve, reject) => {
+      this.db.run(sql, [key, value], function(err) {
+        if (err) {
+          reject(err);
+        } else {
+          resolve(this.lastID);
+        }
+      });
+    });
+  }
+
+  // 获取认证配置
+  async getAuthConfig(key) {
+    const sql = `SELECT value FROM auth_config WHERE key = ?`;
+    
+    return new Promise((resolve, reject) => {
+      this.db.get(sql, [key], (err, row) => {
+        if (err) {
+          reject(err);
+        } else {
+          resolve(row ? row.value : null);
+        }
+      });
+    });
+  }
+
+  // 创建新会话
+  async createSession(sessionId, ipAddress, userAgent, expiresAt) {
+    const sql = `
+      INSERT INTO auth_sessions (session_id, ip_address, user_agent, expires_at)
+      VALUES (?, ?, ?, ?)
+    `;
+    
+    return new Promise((resolve, reject) => {
+      this.db.run(sql, [sessionId, ipAddress, userAgent, expiresAt], function(err) {
+        if (err) {
+          reject(err);
+        } else {
+          resolve(this.lastID);
+        }
+      });
+    });
+  }
+
+  // 验证会话
+  async validateSession(sessionId) {
+    const sql = `
+      SELECT * FROM auth_sessions 
+      WHERE session_id = ? AND expires_at > CURRENT_TIMESTAMP
+    `;
+    
+    return new Promise((resolve, reject) => {
+      this.db.get(sql, [sessionId], (err, row) => {
+        if (err) {
+          reject(err);
+        } else {
+          if (row) {
+            // 更新最后活动时间
+            this.updateSessionActivity(sessionId).catch(console.error);
+          }
+          resolve(row || null);
+        }
+      });
+    });
+  }
+
+  // 更新会话活动时间
+  async updateSessionActivity(sessionId) {
+    const sql = `
+      UPDATE auth_sessions 
+      SET last_activity = CURRENT_TIMESTAMP 
+      WHERE session_id = ?
+    `;
+    
+    return new Promise((resolve, reject) => {
+      this.db.run(sql, [sessionId], function(err) {
+        if (err) {
+          reject(err);
+        } else {
+          resolve(this.changes);
+        }
+      });
+    });
+  }
+
+  // 删除会话（登出）
+  async deleteSession(sessionId) {
+    const sql = `DELETE FROM auth_sessions WHERE session_id = ?`;
+    
+    return new Promise((resolve, reject) => {
+      this.db.run(sql, [sessionId], function(err) {
+        if (err) {
+          reject(err);
+        } else {
+          resolve(this.changes);
+        }
+      });
+    });
+  }
+
+  // 清理过期会话
+  async cleanupExpiredSessions() {
+    const sql = `DELETE FROM auth_sessions WHERE expires_at <= CURRENT_TIMESTAMP`;
+    
+    return new Promise((resolve, reject) => {
+      this.db.run(sql, [], function(err) {
+        if (err) {
+          reject(err);
+        } else {
+          resolve(this.changes);
+        }
+      });
+    });
+  }
+
+  // 记录登录尝试
+  async recordLoginAttempt(ipAddress, success, captchaRequired = false) {
+    const sql = `
+      INSERT INTO login_attempts (ip_address, success, captcha_required)
+      VALUES (?, ?, ?)
+    `;
+    
+    return new Promise((resolve, reject) => {
+      this.db.run(sql, [ipAddress, success, captchaRequired], function(err) {
+        if (err) {
+          reject(err);
+        } else {
+          resolve(this.lastID);
+        }
+      });
+    });
+  }
+
+  // 获取最近登录失败次数
+  async getRecentFailedAttempts(ipAddress, minutesAgo = 15) {
+    const sql = `
+      SELECT COUNT(*) as count 
+      FROM login_attempts 
+      WHERE ip_address = ? 
+        AND success = 0 
+        AND attempt_time > datetime('now', '-${minutesAgo} minutes')
+    `;
+    
+    return new Promise((resolve, reject) => {
+      this.db.get(sql, [ipAddress], (err, row) => {
+        if (err) {
+          reject(err);
+        } else {
+          resolve(row ? row.count : 0);
+        }
+      });
+    });
+  }
+
+  // 检查是否需要验证码
+  async shouldRequireCaptcha(ipAddress) {
+    const failedAttempts = await this.getRecentFailedAttempts(ipAddress);
+    return failedAttempts >= 3; // 3次失败后需要验证码
+  }
+
+  // 初始化默认认证配置
+  async initializeAuthConfig() {
+    try {
+      // 检查是否已经有访问密码配置
+      const existingPassword = await this.getAuthConfig('access_password');
+      if (!existingPassword) {
+        // 设置默认密码（建议用户首次登录后修改）
+        const crypto = await import('crypto');
+        const defaultPassword = 'admin123'; // 默认密码
+        const hashedPassword = crypto.createHash('sha256').update(defaultPassword).digest('hex');
+        await this.setAuthConfig('access_password', hashedPassword);
+        console.log('✅ 已设置默认访问密码: admin123 (请登录后修改)');
+      }
+
+      // 设置会话过期时间（24小时）
+      const sessionExpiry = await this.getAuthConfig('session_expiry_hours');
+      if (!sessionExpiry) {
+        await this.setAuthConfig('session_expiry_hours', '24');
+      }
+
+      // 设置最大登录失败次数
+      const maxFailedAttempts = await this.getAuthConfig('max_failed_attempts');
+      if (!maxFailedAttempts) {
+        await this.setAuthConfig('max_failed_attempts', '5');
+      }
+
+    } catch (error) {
+      console.error('❌ 初始化认证配置失败:', error);
+      throw error;
+    }
   }
 }
 

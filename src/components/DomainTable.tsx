@@ -11,16 +11,16 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Search, Bell, BellOff, ArrowUpDown, AlertTriangle, CheckCircle2, Clock, XCircle, Circle, AlertCircle, Trash2, FolderPlus, Tag, Filter, Star, MessageSquare, Settings } from 'lucide-react';
+import { Search, ArrowUpDown, AlertTriangle, CheckCircle2, Clock, XCircle, Circle, AlertCircle, Trash2, FolderPlus, Tag, Filter, Star, MessageSquare, Settings } from 'lucide-react';
 import { BatchGroupDialog } from './BatchGroupDialog';
 import { BatchOperationDialog } from './BatchOperationDialog';
+import { DomainInfoDialog } from './DomainInfoDialog';
 import { apiService } from '@/lib/api';
 import type { Domain, DomainStatus } from '@/types/domain';
 import type { Group } from '@/types/group';
 
 interface DomainTableProps {
   domains: Domain[];
-  onToggleNotifications: (domainId: string) => void;
   onRefreshDomain: (domainId: string) => void;
   onDeleteDomains?: (domainIds: string[]) => void;
   onGroupOperationSuccess?: () => void;
@@ -48,7 +48,6 @@ const renderStatusLabel = (status: keyof typeof statusConfig) => {
 
 export function DomainTable({ 
   domains, 
-  onToggleNotifications, 
   onRefreshDomain, 
   onDeleteDomains, 
   onGroupOperationSuccess,
@@ -60,6 +59,15 @@ export function DomainTable({
   const [selectedDomains, setSelectedDomains] = useState<Set<string>>(new Set());
   const [batchGroupDialogOpen, setBatchGroupDialogOpen] = useState(false);
   const [batchOperationDialogOpen, setBatchOperationDialogOpen] = useState(false);
+  
+  // 内联编辑备注功能
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
+  const [editingNoteValue, setEditingNoteValue] = useState('');
+  const [savingNote, setSavingNote] = useState(false);
+  
+  // 域名详情弹窗
+  const [selectedDomain, setSelectedDomain] = useState<Domain | null>(null);
+  const [showDomainInfo, setShowDomainInfo] = useState(false);
   
   // 分组筛选相关状态
   const [groups, setGroups] = useState<Group[]>([]);
@@ -211,6 +219,61 @@ export function DomainTable({
     setSelectedDomains(new Set()); // 清空选择
   };
 
+  // 内联编辑备注功能
+  const handleEditNote = (domainId: string, currentNotes: string) => {
+    setEditingNoteId(domainId);
+    setEditingNoteValue(currentNotes || '');
+  };
+
+  const handleSaveNote = async (domainId: string) => {
+    if (savingNote) return;
+    
+    setSavingNote(true);
+    try {
+      await apiService.updateDomainNotes(domainId, editingNoteValue);
+      
+      // 刷新域名数据以获取最新状态
+      if (onGroupOperationSuccess) {
+        onGroupOperationSuccess();
+      }
+      
+      // 重置编辑状态
+      setEditingNoteId(null);
+      setEditingNoteValue('');
+    } catch (error) {
+      console.error('更新备注失败:', error);
+      // 这里可以添加错误提示
+    } finally {
+      setSavingNote(false);
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setEditingNoteId(null);
+    setEditingNoteValue('');
+  };
+
+  const handleNoteKeyDown = (e: React.KeyboardEvent, domainId: string) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleSaveNote(domainId);
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      handleCancelEdit();
+    }
+  };
+
+  // 域名详情处理函数
+  const handleShowDomainInfo = (domain: Domain) => {
+    setSelectedDomain(domain);
+    setShowDomainInfo(true);
+  };
+
+  const handleCloseDomainInfo = () => {
+    setShowDomainInfo(false);
+    setSelectedDomain(null);
+  };
+
   // 获取当前选择的分组信息
   const getCurrentGroupInfo = () => {
     if (selectedGroupId === null) {
@@ -232,7 +295,6 @@ export function DomainTable({
     registeredAt: 'Registered',
     expiresAt: 'Expires',
     status: 'Status',
-    notifications: 'Notifications',
     actions: 'Actions',
     deleteSelected: 'Delete Selected',
     groupOperation: 'Group Operations',
@@ -243,7 +305,6 @@ export function DomainTable({
     domainStatus: 'Domain Status',
     statusLabel: 'Status Label',
     lastCheck: 'Last Check',
-    notificationStatus: 'Notification Status',
     batchOperations: 'Batch Operations',
     important: 'Important',
     notes: 'Notes'
@@ -254,7 +315,6 @@ export function DomainTable({
     registeredAt: '注册时间',
     expiresAt: '到期时间',
     status: '状态',
-    notifications: '通知',
     actions: '操作',
     deleteSelected: '删除选中',
     groupOperation: '分组操作',
@@ -265,7 +325,6 @@ export function DomainTable({
     domainStatus: '域名状态',
     statusLabel: '状态标识',
     lastCheck: '最后检查',
-    notificationStatus: '通知状态',
     batchOperations: '批量操作',
     important: '重要性',
     notes: '备注'
@@ -488,12 +547,18 @@ export function DomainTable({
                 </div>
               </TableHead>
               <TableHead className="text-center">{labels.dnsProvider}</TableHead>
-              <TableHead className="text-center">{labels.domainStatus}</TableHead>
-              <TableHead className="text-center">{labels.statusLabel}</TableHead>
+              <TableHead 
+                className="cursor-pointer hover:bg-muted/50 text-center"
+                onClick={() => handleSort('status')}
+              >
+                <div className="flex items-center justify-center">
+                  {labels.statusLabel}
+                  <ArrowUpDown className="ml-2 h-4 w-4" />
+                </div>
+              </TableHead>
               <TableHead className="text-center">{labels.lastCheck}</TableHead>
-              <TableHead className="text-center">{labels.important}</TableHead>
               <TableHead className="text-center">{labels.notes}</TableHead>
-              <TableHead>{labels.notificationStatus}</TableHead>
+              <TableHead className="text-center">操作</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -505,7 +570,16 @@ export function DomainTable({
                     onChange={(checked) => handleSelectDomain(domain.id, checked)}
                   />
                 </TableCell>
-                <TableCell className="font-medium text-center">{domain.domain}</TableCell>
+                <TableCell className="font-medium text-center">
+                  {domain.isImportant ? (
+                    <span className="flex items-center justify-center gap-1">
+                      <Star className="h-3 w-3 text-yellow-500" />
+                      <span>{domain.domain}</span>
+                    </span>
+                  ) : (
+                    <span>{domain.domain}</span>
+                  )}
+                </TableCell>
                 <TableCell className="text-center">{domain.registrar || '-'}</TableCell>
                 <TableCell className="text-center min-w-[140px]">
                   <div className="space-y-1">
@@ -522,9 +596,6 @@ export function DomainTable({
                   </div>
                 </TableCell>
                 <TableCell className="text-center">{domain.dnsProvider || '-'}</TableCell>
-                <TableCell className="max-w-[200px] truncate text-center">
-                  {domain.domainStatus || '-'}
-                </TableCell>
                 <TableCell className="text-center">
                   <Badge variant={statusConfig[domain.status].variant}>
                     {renderStatusLabel(domain.status)}
@@ -533,39 +604,58 @@ export function DomainTable({
                 <TableCell className="text-sm text-muted-foreground text-center">
                   {getTimeAgo(domain.lastCheck)}
                 </TableCell>
-                <TableCell className="text-center">
-                  {domain.isImportant ? (
-                    <Star className="h-4 w-4 text-yellow-500 mx-auto" />
-                  ) : (
-                    <div className="w-4 h-4 mx-auto"></div>
-                  )}
-                </TableCell>
-                <TableCell className="text-center max-w-[150px]">
-                  {domain.notes ? (
-                    <div 
-                      className="flex items-center justify-center gap-1 text-sm text-blue-600 hover:text-blue-800 cursor-help"
-                      title={domain.notes}
-                    >
-                      <MessageSquare className="h-4 w-4" />
-                      <span className="truncate">{domain.notes}</span>
+                <TableCell className="text-center max-w-[120px]">
+                  {editingNoteId === domain.id ? (
+                    // 编辑模式
+                    <div className="flex items-center gap-2">
+                      <Input
+                        value={editingNoteValue}
+                        onChange={(e) => setEditingNoteValue(e.target.value)}
+                        onKeyDown={(e) => handleNoteKeyDown(e, domain.id)}
+                        onBlur={() => handleSaveNote(domain.id)}
+                        placeholder={language === 'en' ? 'Enter notes...' : '输入备注...'}
+                        className="h-8 text-xs"
+                        disabled={savingNote}
+                        autoFocus
+                      />
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={handleCancelEdit}
+                        className="h-6 w-6 p-0"
+                        disabled={savingNote}
+                      >
+                        ×
+                      </Button>
                     </div>
                   ) : (
-                    <span className="text-muted-foreground">-</span>
+                    // 显示模式
+                    <div 
+                      className="cursor-pointer hover:bg-muted/30 rounded px-2 py-1 min-h-[32px] flex items-center justify-center"
+                      onClick={() => handleEditNote(domain.id, domain.notes || '')}
+                      title={domain.notes ? `${domain.notes} (点击编辑)` : '点击添加备注'}
+                    >
+                      {domain.notes ? (
+                        <span className="text-sm text-blue-600 truncate max-w-[100px]" title={domain.notes}>
+                          {domain.notes.length > 6 ? `${domain.notes.substring(0, 6)}...` : domain.notes}
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground text-xs">+ 添加备注</span>
+                      )}
+                    </div>
                   )}
                 </TableCell>
-                <TableCell>
+                <TableCell className="text-center">
                   <Button
                     variant="ghost"
-                    size="icon"
-                    onClick={() => onToggleNotifications(domain.id)}
+                    size="sm"
+                    onClick={() => handleShowDomainInfo(domain)}
+                    className="text-xs px-2 h-7"
                   >
-                    {domain.notifications ? (
-                      <Bell className="h-4 w-4" />
-                    ) : (
-                      <BellOff className="h-4 w-4" />
-                    )}
+                    更多信息
                   </Button>
                 </TableCell>
+
               </TableRow>
             ))}
           </TableBody>
@@ -601,6 +691,14 @@ export function DomainTable({
             onGroupOperationSuccess();
           }
         }}
+        language={language}
+      />
+
+      {/* 域名详情弹窗 */}
+      <DomainInfoDialog
+        open={showDomainInfo}
+        onClose={handleCloseDomainInfo}
+        domain={selectedDomain}
         language={language}
       />
     </div>

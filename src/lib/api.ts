@@ -3,19 +3,36 @@ import type { Domain, ImportResult } from '@/types/domain';
 const API_BASE_URL = 'http://localhost:3001/api';
 
 class ApiService {
+  private getSessionId(): string | null {
+    return localStorage.getItem('sessionId');
+  }
+
   private async request<T>(endpoint: string, options?: RequestInit): Promise<T> {
     const url = `${API_BASE_URL}${endpoint}`;
+    const sessionId = this.getSessionId();
     
     try {
       const response = await fetch(url, {
         headers: {
           'Content-Type': 'application/json',
+          ...(sessionId && { 'X-Session-Id': sessionId }),
           ...options?.headers,
         },
         ...options,
       });
 
       if (!response.ok) {
+        // 如果是401认证失败，触发重新登录
+        if (response.status === 401) {
+          const errorData = await response.json().catch(() => ({}));
+          if (errorData.requiresAuth) {
+            // 清理本地会话
+            localStorage.removeItem('sessionId');
+            // 刷新页面到登录界面
+            window.location.reload();
+            return;
+          }
+        }
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
@@ -39,18 +56,18 @@ class ApiService {
     });
   }
 
-  // 切换域名通知状态
-  async toggleNotifications(domainId: string, notifications: boolean): Promise<{ success: boolean }> {
-    return this.request<{ success: boolean }>(`/domains/${domainId}/notifications`, {
-      method: 'PATCH',
-      body: JSON.stringify({ notifications }),
-    });
-  }
-
   // 刷新单个域名信息
   async refreshDomain(domainId: string): Promise<{ success: boolean }> {
     return this.request<{ success: boolean }>(`/domains/${domainId}/refresh`, {
       method: 'POST',
+    });
+  }
+
+  // 更新域名备注
+  async updateDomainNotes(domainId: string, notes: string): Promise<{ success: boolean; message: string }> {
+    return this.request<{ success: boolean; message: string }>(`/domains/${domainId}/notes`, {
+      method: 'PATCH',
+      body: JSON.stringify({ notes }),
     });
   }
 

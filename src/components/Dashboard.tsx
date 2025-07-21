@@ -52,22 +52,6 @@ export default function Dashboard() {
     }
   };
 
-  const handleToggleNotifications = async (domainId: string) => {
-    try {
-      const domain = domains.find(d => d.id === domainId);
-      if (!domain) return;
-
-      await apiService.toggleNotifications(domainId, !domain.notifications);
-      
-      // 更新本地状态
-      setDomains(prev => prev.map(d => 
-        d.id === domainId ? { ...d, notifications: !d.notifications } : d
-      ));
-    } catch (error) {
-      console.error('Failed to toggle notifications:', error);
-    }
-  };
-
   const handleRefreshDomain = async (domainId: string) => {
     try {
       await apiService.refreshDomain(domainId);
@@ -197,7 +181,6 @@ export default function Dashboard() {
       <div>
         <DomainTable
           domains={domains}
-          onToggleNotifications={handleToggleNotifications}
           onRefreshDomain={handleRefreshDomain}
           onDeleteDomains={handleDeleteDomains}
           onGroupOperationSuccess={handleRefreshData}
