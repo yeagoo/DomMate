@@ -56,9 +56,12 @@ jobs:
           node-version: '18'
           cache: 'npm'
       
-      # Install dependencies
+      # Install dependencies (fix rollup native module issue)
       - name: Install dependencies
-        run: npm ci
+        run: |
+          npm cache clean --force
+          rm -rf node_modules package-lock.json
+          npm install
       
       # Run tests (if available)
       - name: Run tests

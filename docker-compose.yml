@@ -1,0 +1,136 @@
+# ================================
+# DomMate - Production Docker Compose
+# ================================
+
+version: '3.8'
+
+services:
+  # Main DomMate application
+  dommate:
+    image: ghcr.io/yeagoo/dommate:latest
+    container_name: dommate
+    restart: unless-stopped
+    
+    # Port mapping
+    ports:
+      - "3001:3001"
+    
+    # Environment variables
+    environment:
+      - NODE_ENV=production
+      - SERVER_PORT=3001
+      - DATABASE_PATH=/app/data/domains.db
+      - EXPORT_DIR=/app/exports
+      - LOG_FILE=/app/logs/dommate.log
+      - DATABASE_BACKUP_DIR=/app/data/backups
+      - TZ=UTC
+      - PUID=1000
+      - PGID=1000
+    
+    # Environment file (create from env.example)
+    env_file:
+      - .env
+    
+    # Volume mounts for persistent data
+    volumes:
+      - dommate_data:/app/data
+      - dommate_logs:/app/logs
+      - dommate_exports:/app/exports
+      - dommate_backups:/app/data/backups
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/api/auth/info"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    
+    # Security options
+    security_opt:
+      - no-new-privileges:true
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '1.0'
+        reservations:
+          memory: 256M
+          cpus: '0.5'
+    
+    # Networks
+    networks:
+      - dommate_network
+
+  # Nginx reverse proxy (optional)
+  nginx:
+    image: nginx:alpine
+    container_name: dommate_nginx
+    restart: unless-stopped
+    
+    # Port mapping for HTTP/HTTPS
+    ports:
+      - "80:80"
+      - "443:443"
+    
+    # Volume mounts for Nginx configuration
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - nginx_cache:/var/cache/nginx
+      - nginx_logs:/var/log/nginx
+      # SSL certificates (if using HTTPS)
+      # - ./ssl:/etc/nginx/ssl:ro
+    
+    # Depends on main application
+    depends_on:
+      dommate:
+        condition: service_healthy
+    
+    # Networks
+    networks:
+      - dommate_network
+
+# Named volumes for persistent data
+volumes:
+  dommate_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./data
+  
+  dommate_logs:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./logs
+  
+  dommate_exports:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./exports
+  
+  dommate_backups:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./backups
+  
+  nginx_cache:
+    driver: local
+  
+  nginx_logs:
+    driver: local
+
+# Custom network
+networks:
+  dommate_network:
+    driver: bridge
+    name: dommate_network 
