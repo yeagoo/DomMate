@@ -44,8 +44,8 @@ RUN apk add --no-cache \
     && rm -rf /var/cache/apk/*
 
 # Create non-root user
-RUN addgroup -g 1000 dommate && \
-    adduser -u 1000 -G dommate -s /bin/sh -D dommate
+RUN addgroup -S dommate && \
+    adduser -u 1000 -D -S -G dommate -s /bin/sh dommate
 
 # Set working directory
 WORKDIR /app
