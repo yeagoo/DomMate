@@ -1,7 +1,7 @@
-// DomainFlow 第三方API集成功能演示脚本
+// DomMate 第三方API集成功能演示脚本
 import { API_CONFIG, getQueryStrategy, isApiEnabled } from './server/config.js';
 
-console.log('🚀 DomainFlow 第三方API集成功能演示\n');
+console.log('🚀 DomMate 第三方API集成功能演示\n');
 
 // 演示配置状态
 console.log('📋 当前API配置状态:');

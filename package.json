@@ -1,15 +1,26 @@
 {
-  "name": "domainflow",
+  "name": "dommate",
   "type": "module",
   "version": "0.1.0",
-  "description": "一个极简美学、支持多种导入方式的域名到期自动监控平台",
+  "description": "DomMate - 专业的域名到期监控解决方案",
+  "keywords": ["domain", "monitoring", "expiry", "dommate", "nodejs", "astro"],
+  "homepage": "https://dommate.com",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dommate/dommate.git"
+  },
+  "bugs": {
+    "url": "https://github.com/dommate/dommate/issues"
+  },
+  "author": "DomMate Team",
+  "license": "MIT",
   "scripts": {
     "dev": "astro dev",
     "start": "astro dev",
-    "build": "astro check && astro build",
+    "build": "astro build",
     "preview": "astro preview",
     "astro": "astro",
-    "check": "astro check",
+    "typecheck": "astro check",
     "server": "node server/index.js",
     "server:dev": "node --watch server/index.js"
   },

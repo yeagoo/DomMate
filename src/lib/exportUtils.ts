@@ -134,7 +134,7 @@ export class FrontendExportUtils {
     if (includeMetadata) {
       exportData.metadata = {
         exportDate: new Date().toISOString(),
-        exportedBy: 'DomainFlow',
+        exportedBy: 'DomMate',
         totalRecords: domains.length,
         selectedFields,
         language,

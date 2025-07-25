@@ -524,7 +524,7 @@ class DomainDatabase {
           <body>
             <div class="email-container">
               <div class="header">
-                <h1>DomainFlow 域名到期提醒</h1>
+                <h1>DomMate 域名到期提醒</h1>
               </div>
               <div class="content">
                 <p>您好，</p>
@@ -569,7 +569,7 @@ class DomainDatabase {
           <body>
             <div class="email-container">
               <div class="header">
-                <h1>DomainFlow Domain Expiry Notice</h1>
+                <h1>DomMate Domain Expiry Notice</h1>
               </div>
               <div class="content">
                 <p>Hello,</p>
@@ -597,7 +597,7 @@ class DomainDatabase {
         name: '每日汇总报告（中文）',
         type: 'summary',
         language: 'zh',
-        subject: 'DomainFlow 域名监控日报 - {{date}}',
+        subject: 'DomMate 域名监控日报 - {{date}}',
         htmlContent: `
           <!DOCTYPE html>
           <html>
@@ -618,7 +618,7 @@ class DomainDatabase {
           <body>
             <div class="email-container">
               <div class="header">
-                <h1>DomainFlow 域名监控日报</h1>
+                <h1>DomMate 域名监控日报</h1>
                 <p>{{date}}</p>
               </div>
               <div class="content">
@@ -657,7 +657,7 @@ class DomainDatabase {
           </body>
           </html>
         `,
-        textContent: 'DomainFlow 域名监控日报 - {{date}}\n\n统计信息：\n- 总域名数: {{totalDomains}}\n- 即将到期: {{expiringDomains}}\n- 已过期: {{expiredDomains}}\n\n{{#if expiringSoon}}近期到期域名：\n{{#each expiringSoon}}• {{domain}} - 剩余 {{days}} 天\n{{/each}}{{/if}}',
+        textContent: 'DomMate 域名监控日报 - {{date}}\n\n统计信息：\n- 总域名数: {{totalDomains}}\n- 即将到期: {{expiringDomains}}\n- 已过期: {{expiredDomains}}\n\n{{#if expiringSoon}}近期到期域名：\n{{#each expiringSoon}}• {{domain}} - 剩余 {{days}} 天\n{{/each}}{{/if}}',
         variables: JSON.stringify(['date', 'totalDomains', 'expiringDomains', 'expiredDomains', 'expiringSoon', 'expiredList']),
         isDefault: true,
         isActive: true

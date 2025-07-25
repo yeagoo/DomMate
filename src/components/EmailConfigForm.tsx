@@ -389,7 +389,7 @@ export function EmailConfigForm({ config, onSave, onCancel, language = 'zh' }: E
               <p className="text-xs text-gray-500">{labels.defaultDesc}</p>
             </div>
             <Switch
-              checked={formData.isDefault}
+              checked={formData.isDefault || false}
               onCheckedChange={(checked) => handleInputChange('isDefault', checked)}
             />
           </div>
@@ -460,3 +460,5 @@ export function EmailConfigForm({ config, onSave, onCancel, language = 'zh' }: E
     </Card>
   );
 } 
+
+export default EmailConfigForm; 

@@ -30,7 +30,7 @@ class ApiService {
             localStorage.removeItem('sessionId');
             // 刷新页面到登录界面
             window.location.reload();
-            return;
+            return undefined as any;
           }
         }
         throw new Error(`HTTP error! status: ${response.status}`);

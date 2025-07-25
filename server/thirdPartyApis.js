@@ -21,7 +21,7 @@ export async function queryViewDNS(domain) {
     const response = await fetch(url.toString(), {
       timeout: API_CONFIG.viewDNS.timeout,
       headers: {
-        'User-Agent': 'DomainFlow/1.0'
+        'User-Agent': 'DomMate/1.0'
       }
     });
 
@@ -61,7 +61,7 @@ export async function queryIP2WHOIS(domain) {
     const response = await fetch(url.toString(), {
       timeout: API_CONFIG.ip2whois.timeout,
       headers: {
-        'User-Agent': 'DomainFlow/1.0'
+        'User-Agent': 'DomMate/1.0'
       }
     });
 

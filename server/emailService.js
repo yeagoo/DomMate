@@ -148,7 +148,7 @@ class EmailService {
       // 构建邮件选项
       const mailOptions = {
         from: {
-          name: config.fromName || 'DomainFlow',
+          name: config.fromName || 'DomMate',
           address: config.fromEmail
         },
         to: recipient,
@@ -207,20 +207,20 @@ class EmailService {
       // 发送测试邮件
       const testEmailOptions = {
         from: {
-          name: config.fromName || 'DomainFlow',
+          name: config.fromName || 'DomMate',
           address: config.fromEmail
         },
         to: config.fromEmail, // 发送给自己
-        subject: 'DomainFlow 邮件配置测试',
+        subject: 'DomMate 邮件配置测试',
         html: `
           <h2>邮件配置测试成功</h2>
-          <p>这是来自 DomainFlow 的测试邮件。</p>
+          <p>这是来自 DomMate 的测试邮件。</p>
           <p><strong>配置名称:</strong> ${config.name}</p>
           <p><strong>SMTP服务器:</strong> ${config.host}:${config.port}</p>
           <p><strong>发送时间:</strong> ${new Date().toLocaleString('zh-CN')}</p>
           <p>如果您收到这封邮件，说明邮件配置正常工作。</p>
         `,
-        text: `DomainFlow 邮件配置测试\n\n这是来自 DomainFlow 的测试邮件。\n配置名称: ${config.name}\nSMTP服务器: ${config.host}:${config.port}\n发送时间: ${new Date().toLocaleString('zh-CN')}\n\n如果您收到这封邮件，说明邮件配置正常工作。`
+        text: `DomMate 邮件配置测试\n\n这是来自 DomMate 的测试邮件。\n配置名称: ${config.name}\nSMTP服务器: ${config.host}:${config.port}\n发送时间: ${new Date().toLocaleString('zh-CN')}\n\n如果您收到这封邮件，说明邮件配置正常工作。`
       };
 
       const info = await transporter.sendMail(testEmailOptions);
@@ -513,7 +513,7 @@ class EmailService {
                 ruleId: rule.id,
                 domainIds: [],
                 recipient: recipient,
-                subject: `DomainFlow 域名监控${type === 'daily' ? '日报' : '周报'}`,
+                subject: `DomMate 域名监控${type === 'daily' ? '日报' : '周报'}`,
                 status: 'sent',
                 sentAt: new Date().toISOString(),
                 retryCount: 0
@@ -534,7 +534,7 @@ class EmailService {
                 ruleId: rule.id,
                 domainIds: [],
                 recipient: recipient,
-                subject: `DomainFlow 域名监控${type === 'daily' ? '日报' : '周报'}`,
+                subject: `DomMate 域名监控${type === 'daily' ? '日报' : '周报'}`,
                 status: 'failed',
                 errorMessage: error.message,
                 retryCount: 0

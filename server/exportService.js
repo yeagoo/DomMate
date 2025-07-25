@@ -146,7 +146,7 @@ class ExportService {
         info: {
           Title: title,
           Subject: 'Domain Monitoring Report',
-          Author: 'DomainFlow'
+          Author: 'DomMate'
         }
       });
       
@@ -204,7 +204,7 @@ class ExportService {
         for (let i = 0; i < pages.count; i++) {
           doc.switchToPage(i);
           doc.fontSize(8).text(
-            `${language === 'en' ? 'Page' : '第'} ${i + 1} ${language === 'en' ? 'of' : '页，共'} ${pages.count} ${language === 'en' ? '' : '页'} | DomainFlow`, 
+            `${language === 'en' ? 'Page' : '第'} ${i + 1} ${language === 'en' ? 'of' : '页，共'} ${pages.count} ${language === 'en' ? '' : '页'} | DomMate`, 
             50, 
             doc.page.height - 50, 
             { align: 'center' }
@@ -241,7 +241,7 @@ class ExportService {
     const exportData = {
       metadata: includeMetadata ? {
         exportDate: new Date().toISOString(),
-        exportedBy: 'DomainFlow',
+        exportedBy: 'DomMate',
         totalRecords: domains.length,
         selectedFields,
         language,
