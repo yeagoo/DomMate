@@ -161,7 +161,7 @@ jobs:
       # Upload SBOM artifact
       - name: Upload SBOM
         if: github.event_name != 'pull_request'
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: sbom
           path: sbom.spdx.json
@@ -212,32 +212,29 @@ jobs:
         uses: actions/checkout@v4
       
       - name: Create release
-        uses: actions/create-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: ${{ github.ref_name }}
-          release_name: DomMate ${{ github.ref_name }}
-          body: |
-            ## What's Changed
-            
-            Docker image: `${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}`
-            
-            ### Installation
-            
-            ```bash
-            docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}
-            ```
-            
-            ### Docker Compose
-            
-            ```yaml
-            services:
-              dommate:
-                image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}
-                # ... other configuration
-            ```
-            
-            See [README.md](README.md) for full installation instructions.
-          draft: false
-          prerelease: ${{ contains(github.ref_name, '-') }} 
+        run: |
+          gh release create ${{ github.ref_name }} \
+            --title "DomMate ${{ github.ref_name }}" \
+            --notes "## What's Changed
+
+          Docker image: \`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}\`
+
+          ### Installation
+
+          \`\`\`bash
+          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}
+          \`\`\`
+
+          ### Docker Compose
+
+          \`\`\`yaml
+          services:
+            dommate:
+              image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}
+              # ... other configuration
+          \`\`\`
+
+          See [README.md](README.md) for full installation instructions." \
+            ${{ contains(github.ref_name, '-') && '--prerelease' || '' }} 
