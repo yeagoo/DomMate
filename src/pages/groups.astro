@@ -1,0 +1,21 @@
+---
+import Layout from '../layouts/Layout.astro';
+import GroupManagementWithAuth from '../components/GroupManagementWithAuth.tsx';
+---
+
+<Layout title="分组管理 - DomMate">
+  <GroupManagementWithAuth client:load language="zh" />
+</Layout>
+
+<script>
+  import { createElement } from 'react';
+  import { createRoot } from 'react-dom/client';
+  import { ThemeToggle } from '../components/ThemeToggle.tsx';
+
+  // 渲染主题切换器
+  const themeToggleContainer = document.getElementById('theme-toggle');
+  if (themeToggleContainer) {
+    const root = createRoot(themeToggleContainer);
+    root.render(createElement(ThemeToggle));
+  }
+</script> 

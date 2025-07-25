@@ -1,0 +1,21 @@
+---
+import LayoutEn from '../../layouts/LayoutEn.astro';
+import DashboardEnWithAuth from '../../components/DashboardEnWithAuth.tsx';
+---
+
+<LayoutEn title="DomMate - Domain Monitoring Platform">
+  <DashboardEnWithAuth client:load language="en" />
+</LayoutEn>
+
+<script>
+  import { createElement } from 'react';
+  import { createRoot } from 'react-dom/client';
+  import { ThemeToggleEn } from '../../components/ThemeToggleEn.tsx';
+
+  // 渲染主题切换器
+  const themeToggleContainer = document.getElementById('theme-toggle-en');
+  if (themeToggleContainer) {
+    const root = createRoot(themeToggleContainer);
+    root.render(createElement(ThemeToggleEn));
+  }
+</script> 

@@ -1,0 +1,80 @@
+{
+  "app": {
+    "title": "DomMate",
+    "subtitle": "域名监控平台",
+    "description": "专业的域名到期监控解决方案"
+  },
+  "nav": {
+    "home": "首页",
+    "dashboard": "仪表盘",
+    "settings": "设置"
+  },
+  "domain": {
+    "import": "导入域名",
+    "add": "添加域名",
+    "list": "域名列表",
+    "total": "总域名数",
+    "search": "搜索域名或注册商...",
+    "recheck_all": "重新检查",
+    "rechecking": "重新检查中..."
+  },
+  "import": {
+    "title": "导入域名",
+    "description": "选择导入方式来批量添加需要监控的域名",
+    "methods": {
+      "lines": "按行粘贴",
+      "file": "文件导入", 
+      "string": "字符串导入"
+    },
+    "placeholders": {
+      "lines": "每行输入一个域名",
+      "string": "使用逗号分隔多个域名"
+    },
+    "file": {
+      "upload": "上传文件",
+      "template": "下载模板",
+      "support": "支持 CSV 和 TXT 格式。CSV 文件请确保域名在第一列。"
+    },
+    "actions": {
+      "cancel": "取消",
+      "import": "导入域名",
+      "importing": "导入中..."
+    }
+  },
+  "table": {
+    "headers": {
+      "domain": "域名",
+      "registrar": "注册商",
+      "expires": "到期时间",
+      "dns": "DNS 提供商",
+      "status": "域名状态",
+      "badge": "状态标识",
+      "lastCheck": "最后检查",
+      "notifications": "通知状态"
+    }
+  },
+  "status": {
+    "normal": "🟢 正常",
+    "expiring": "🟡 即将到期",
+    "expired": "🔴 已过期",
+    "failed": "⚪️ 查询失败"
+  },
+  "stats": {
+    "normal": "正常",
+    "expiring": "即将到期",
+    "expired": "已过期",
+    "failed": "查询失败"
+  },
+  "time": {
+    "days_after": "%d 天后",
+    "days_ago": "%d 天前",
+    "hours_ago": "%d 小时前",
+    "minutes_ago": "%d 分钟前",
+    "just_now": "刚刚",
+    "today": "今天"
+  },
+  "messages": {
+    "no_domains": "暂无域名数据",
+    "no_results": "没有找到匹配的域名"
+  }
+} 

@@ -1,0 +1,11 @@
+[
+  {
+    "timestamp": "2025-07-19T13:38:06.486Z",
+    "filename": "weekly_backup_2025-07-19T13-38-06_1752932286485.json",
+    "format": "json",
+    "size": 3611,
+    "recordCount": 19,
+    "fieldCount": 5,
+    "type": "scheduled"
+  }
+]

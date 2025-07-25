@@ -1,0 +1,41 @@
+[
+  {
+    "id": "17528607446304o5zp8ttg",
+    "domain": "microsoft.com",
+    "registrar": "MarkMonitor, Inc.",
+    "expiresAt": "2026-05-03T00:00:00.000Z",
+    "dnsProvider": "Azure DNS",
+    "domainStatus": "禁止更新, 禁止转移, 禁止删除",
+    "status": "normal",
+    "lastCheck": "2025-07-18T18:00:01.581Z",
+    "notifications": true,
+    "createdAt": "2025-07-18T17:45:44.630Z",
+    "updatedAt": "2025-07-18T18:00:01.581Z"
+  },
+  {
+    "id": "17528607447218mum2j74p",
+    "domain": "baidu.cn",
+    "registrar": "互联网域名系统北京市工程研究中心有限公司",
+    "expiresAt": "2029-03-17T04:48:36.000Z",
+    "dnsProvider": "Baidu.com",
+    "domainStatus": "禁止删除, 禁止更新, 禁止转移",
+    "status": "normal",
+    "lastCheck": "2025-07-18T18:00:02.707Z",
+    "notifications": true,
+    "createdAt": "2025-07-18T17:45:44.721Z",
+    "updatedAt": "2025-07-18T18:00:02.707Z"
+  },
+  {
+    "id": "1752860745120ed3lr7941",
+    "domain": "unregistered-test-domain.com",
+    "registrar": null,
+    "expiresAt": null,
+    "dnsProvider": null,
+    "domainStatus": null,
+    "status": "unregistered",
+    "lastCheck": "2025-07-18T18:00:03.949Z",
+    "notifications": true,
+    "createdAt": "2025-07-18T17:45:45.120Z",
+    "updatedAt": "2025-07-18T18:00:03.949Z"
+  }
+]
