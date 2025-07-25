@@ -16,6 +16,9 @@ export default defineConfig({
     mode: 'standalone'
   }),
   vite: {
+    esbuild: {
+      target: 'es2020'
+    },
     server: {
       proxy: {
         '/api': {
@@ -26,6 +29,7 @@ export default defineConfig({
       }
     }
   },
+
   i18n: {
     defaultLocale: "zh",
     locales: ["zh", "en"],

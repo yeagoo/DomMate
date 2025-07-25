@@ -905,3 +905,5 @@ export function EmailDashboard({ language = 'zh' }: EmailDashboardProps) {
     </div>
   );
 } 
+
+export default EmailDashboard; 

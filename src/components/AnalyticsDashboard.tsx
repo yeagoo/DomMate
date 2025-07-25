@@ -276,3 +276,5 @@ export function AnalyticsDashboard({ language = 'zh' }: AnalyticsDashboardProps)
     </div>
   );
 } 
+
+export default AnalyticsDashboard; 
