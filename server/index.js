@@ -104,6 +104,42 @@ app.get('/api/auth/info', async (req, res) => {
   }
 });
 
+// 检查强制修改密码状态
+app.get('/api/auth/force-password-change', async (req, res) => {
+  try {
+    const passwordChangeNeeded = await db.needsPasswordChange();
+    res.json({
+      success: true,
+      forcePasswordChange: passwordChangeNeeded.required,
+      reason: passwordChangeNeeded.reason
+    });
+  } catch (error) {
+    console.error('检查强制修改密码状态失败:', error);
+    res.status(500).json({
+      success: false,
+      message: '检查强制修改密码状态失败'
+    });
+  }
+});
+
+// 设置强制修改密码（管理员功能）
+app.post('/api/auth/force-password-change', authService.authenticateRequest, async (req, res) => {
+  try {
+    const { reason } = req.body;
+    await db.setForcePasswordChange(reason || '管理员要求修改密码');
+    res.json({
+      success: true,
+      message: '已设置强制修改密码'
+    });
+  } catch (error) {
+    console.error('设置强制修改密码失败:', error);
+    res.status(500).json({
+      success: false,
+      message: '设置强制修改密码失败'
+    });
+  }
+});
+
 // 用户登录
 app.post('/api/auth/login', async (req, res) => {
   try {

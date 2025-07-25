@@ -19,11 +19,13 @@ interface LoginResult {
   sessionId?: string;
   requiresCaptcha?: boolean;
   captcha?: CaptchaData;
+  forcePasswordChange?: boolean;
+  forceChangeReason?: string;
 }
 
 interface LoginFormProps {
   language?: 'zh' | 'en';
-  onLoginSuccess: (sessionId: string) => void;
+  onLoginSuccess: (sessionId: string, options?: { forcePasswordChange?: boolean; reason?: string }) => void;
 }
 
 const LoginForm: React.FC<LoginFormProps> = ({ language = 'zh', onLoginSuccess }) => {
@@ -148,8 +150,17 @@ const LoginForm: React.FC<LoginFormProps> = ({ language = 'zh', onLoginSuccess }
       const result: LoginResult = await response.json();
 
       if (result.success && result.sessionId) {
-        // 登录成功
-        onLoginSuccess(result.sessionId);
+        // 检查是否需要强制修改密码
+        if (result.forcePasswordChange) {
+          // 需要强制修改密码，传递会话信息和原因
+          onLoginSuccess(result.sessionId, {
+            forcePasswordChange: true,
+            reason: result.forceChangeReason || '需要修改密码'
+          });
+        } else {
+          // 正常登录成功
+          onLoginSuccess(result.sessionId);
+        }
       } else {
         // 登录失败
         setError(result.message || t.errors.loginFailed);

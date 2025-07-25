@@ -49,6 +49,9 @@ class AuthService {
   constructor() {
     this.activeCaptchas = new Map(); // 存储活跃的验证码
     this.startCleanupTimer();
+    
+    // 绑定方法以保持正确的this上下文
+    this.authenticateRequest = this.authenticateRequest.bind(this);
   }
 
   // 启动清理定时器
@@ -133,11 +136,16 @@ class AuthService {
       await db.createSession(sessionId, ipAddress, userAgent, expiresAt);
       await db.recordLoginAttempt(ipAddress, true, requiresCaptcha);
 
+      // 检查是否需要强制修改密码
+      const passwordChangeNeeded = await db.needsPasswordChange();
+
       return {
         success: true,
         message: '登录成功',
         sessionId,
-        expiresAt
+        expiresAt,
+        forcePasswordChange: passwordChangeNeeded.required,
+        forceChangeReason: passwordChangeNeeded.reason
       };
 
     } catch (error) {
@@ -191,9 +199,17 @@ class AuthService {
         return { success: false, message: '原密码错误' };
       }
 
+      // 密码复杂度验证
+      if (newPassword.length < 6) {
+        return { success: false, message: '新密码长度至少需要6位字符' };
+      }
+
       // 设置新密码
       const hashedNewPassword = hashPassword(newPassword);
       await db.setAuthConfig('access_password', hashedNewPassword);
+
+      // 清除强制修改密码标记
+      await db.clearForcePasswordChange();
 
       return { success: true, message: '密码修改成功' };
     } catch (error) {

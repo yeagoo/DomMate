@@ -2323,7 +2323,11 @@ class DomainDatabase {
         const defaultPassword = 'admin123'; // 默认密码
         const hashedPassword = crypto.createHash('sha256').update(defaultPassword).digest('hex');
         await this.setAuthConfig('access_password', hashedPassword);
-        console.log('✅ 已设置默认访问密码: admin123 (请登录后修改)');
+        
+        // 标记为强制修改密码（首次使用默认密码）
+        await this.setAuthConfig('force_password_change', 'true');
+        await this.setAuthConfig('password_created_at', new Date().toISOString());
+        console.log('✅ 已设置默认访问密码: admin123 (首次登录需强制修改)');
       }
 
       // 设置会话过期时间（24小时）
@@ -2338,8 +2342,81 @@ class DomainDatabase {
         await this.setAuthConfig('max_failed_attempts', '5');
       }
 
+      // 设置密码过期天数（0表示不过期）
+      const passwordExpireDays = await this.getAuthConfig('password_expire_days');
+      if (!passwordExpireDays) {
+        await this.setAuthConfig('password_expire_days', '0'); // 默认不过期
+      }
+
+      // 设置强制修改密码的原因
+      const forceChangeReason = await this.getAuthConfig('force_change_reason');
+      if (!forceChangeReason) {
+        await this.setAuthConfig('force_change_reason', '');
+      }
+
     } catch (error) {
       console.error('❌ 初始化认证配置失败:', error);
+      throw error;
+    }
+  }
+
+  // 检查是否需要强制修改密码
+  async needsPasswordChange() {
+    try {
+      // 检查强制修改标记
+      const forceChange = await this.getAuthConfig('force_password_change');
+      if (forceChange === 'true') {
+        return {
+          required: true,
+          reason: await this.getAuthConfig('force_change_reason') || '首次登录需要修改默认密码'
+        };
+      }
+
+      // 检查密码是否过期
+      const expireDays = await this.getAuthConfig('password_expire_days');
+      if (expireDays && parseInt(expireDays) > 0) {
+        const passwordCreatedAt = await this.getAuthConfig('password_created_at');
+        if (passwordCreatedAt) {
+          const createdDate = new Date(passwordCreatedAt);
+          const expireDate = new Date(createdDate.getTime() + parseInt(expireDays) * 24 * 60 * 60 * 1000);
+          
+          if (new Date() > expireDate) {
+            return {
+              required: true,
+              reason: `密码已过期 (${expireDays}天)，请修改密码`
+            };
+          }
+        }
+      }
+
+      return { required: false, reason: '' };
+    } catch (error) {
+      console.error('❌ 检查密码修改需求失败:', error);
+      return { required: false, reason: '' };
+    }
+  }
+
+  // 设置强制修改密码
+  async setForcePasswordChange(reason = '') {
+    try {
+      await this.setAuthConfig('force_password_change', 'true');
+      await this.setAuthConfig('force_change_reason', reason);
+      console.log('✅ 已设置强制修改密码标记:', reason);
+    } catch (error) {
+      console.error('❌ 设置强制修改密码失败:', error);
+      throw error;
+    }
+  }
+
+  // 清除强制修改密码标记
+  async clearForcePasswordChange() {
+    try {
+      await this.setAuthConfig('force_password_change', 'false');
+      await this.setAuthConfig('force_change_reason', '');
+      await this.setAuthConfig('password_created_at', new Date().toISOString());
+      console.log('✅ 已清除强制修改密码标记');
+    } catch (error) {
+      console.error('❌ 清除强制修改密码失败:', error);
       throw error;
     }
   }

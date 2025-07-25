@@ -21,10 +21,14 @@ const AuthWrapper: React.FC<AuthWrapperProps> = ({
     if (enableUserMenu) {
       const userMenuContainer = document.getElementById('user-menu');
       if (userMenuContainer) {
+        // 从容器的data-language属性读取语言设置
+        const containerLanguage = userMenuContainer.getAttribute('data-language') as 'zh' | 'en';
+        const finalLanguage = containerLanguage || language;
+        
         const root = createRoot(userMenuContainer);
         root.render(
           <AuthProvider>
-            <UserMenu language={language} />
+            <UserMenu language={finalLanguage} />
           </AuthProvider>
         );
       }
