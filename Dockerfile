@@ -22,6 +22,11 @@ COPY . .
 # Build frontend
 RUN npm run build
 
+# List build output for debugging
+RUN echo "=== Frontend Build Output ===" && \
+    ls -la ./dist/ && \
+    echo "=== Build Complete ==="
+
 # ================================
 # Production stage
 # ================================
@@ -69,11 +74,15 @@ COPY domain-config.js ./
 COPY env.example ./
 
 # Verify frontend build
-RUN ls -la ./dist && \
+RUN echo "=== Verifying Frontend Build ===" && \
+    ls -la ./dist && \
     if [ -f "./dist/index.html" ]; then \
         echo "✅ Frontend build found"; \
+        echo "Index.html size: $(stat -c%s ./dist/index.html) bytes"; \
     else \
-        echo "⚠️  Frontend build missing"; \
+        echo "❌ Frontend build missing index.html"; \
+        echo "Available files in dist:"; \
+        find ./dist -type f | head -10; \
     fi
 
 # Create necessary directories with proper ownership
