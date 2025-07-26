@@ -30,7 +30,7 @@ on:
 # Environment variables
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
+  IMAGE_NAME: yeagoo/dommate
 
 # Jobs
 jobs:
