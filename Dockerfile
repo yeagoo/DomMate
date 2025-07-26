@@ -104,14 +104,15 @@ EXPOSE 3001
 
 # Environment variables
 ENV NODE_ENV=production \
+    PORT=3001 \
     SERVER_PORT=3001 \
     DATABASE_PATH=/app/data/domains.db \
     EXPORT_DIR=/app/exports \
     LOG_FILE=/app/logs/dommate.log \
     DATABASE_BACKUP_DIR=/app/data/backups
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+# Health check - allow more time for startup and database initialization
+HEALTHCHECK --interval=30s --timeout=15s --start-period=120s --retries=5 \
     CMD curl -f http://localhost:3001/api/auth/info || exit 1
 
 # Use dumb-init for proper signal handling

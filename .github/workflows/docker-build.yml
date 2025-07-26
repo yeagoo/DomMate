@@ -140,6 +140,8 @@ jobs:
           docker run -d --name dommate-test \
             -p 3001:3001 \
             -e NODE_ENV=production \
+            -e PORT=3001 \
+            -v dommate-test-data:/app/data \
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
           
           # Check container status
