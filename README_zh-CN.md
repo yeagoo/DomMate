@@ -72,7 +72,8 @@ docker run -d \
   ghcr.io/yeagoo/dommate:latest
 
 # 等待几秒钟让服务启动，然后访问
-# http://localhost:3001
+# 前端界面: http://localhost:3001
+# API接口: http://localhost:3001/api
 ```
 
 **使用 Docker Compose (推荐生产环境)：**
@@ -138,7 +139,9 @@ npm run dev
 
 ### 🎯 首次访问
 
-1. **打开浏览器** 并导航到 `http://localhost:3001` (Docker) 或 `http://localhost:4322` (源码安装)
+1. **打开浏览器** 并导航到：
+   - **Docker部署**: `http://localhost:3001` (前端+后端)
+   - **源码安装**: `http://localhost:4322` (前端) + `http://localhost:3001` (后端)
 2. **登录** 使用默认密码: `admin123`
 3. **立即更改密码** 以确保安全
 4. **开始添加域名** 进行监控
@@ -146,10 +149,13 @@ npm run dev
 ### ⚡ 快速测试
 
 ```bash
-# 检查服务状态
+# 检查前端页面
+curl http://localhost:3001
+
+# 检查API服务状态
 curl http://localhost:3001/api/auth/info
 
-# 预期返回
+# 预期API返回
 {"requiresAuth": true, "hasUsers": true}
 ```
 

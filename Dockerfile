@@ -68,6 +68,14 @@ COPY public ./public
 COPY domain-config.js ./
 COPY env.example ./
 
+# Verify frontend build
+RUN ls -la ./dist && \
+    if [ -f "./dist/index.html" ]; then \
+        echo "✅ Frontend build found"; \
+    else \
+        echo "⚠️  Frontend build missing"; \
+    fi
+
 # Create necessary directories with proper ownership
 RUN mkdir -p /app/data /app/logs /app/exports /app/data/backups && \
     chown -R dommate:dommate /app && \
