@@ -142,11 +142,32 @@ jobs:
             -e NODE_ENV=production \
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
           
-          # Wait for container to be healthy
-          sleep 30
+          # Check container status
+          echo "=== Container Status ==="
+          docker ps -a
           
-          # Test health endpoint
-          curl -f http://localhost:3001/api/auth/info || exit 1
+          # Show container logs
+          echo "=== Container Logs ==="
+          docker logs dommate-test
+          
+          # Wait for container to be ready
+          echo "=== Waiting for service to start ==="
+          for i in {1..12}; do
+            if curl -f http://localhost:3001/api/auth/info 2>/dev/null; then
+              echo "Service is ready!"
+              break
+            fi
+            echo "Attempt $i/12: Service not ready yet, waiting 10s..."
+            sleep 10
+          done
+          
+          # Final test
+          echo "=== Final Health Check ==="
+          curl -f http://localhost:3001/api/auth/info || (
+            echo "=== Final Container Logs ==="
+            docker logs dommate-test
+            exit 1
+          )
           
           # Stop test container
           docker stop dommate-test
