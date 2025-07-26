@@ -82,6 +82,11 @@ RUN mkdir -p /app/data /app/logs /app/exports /app/data/backups && \
     chmod -R 755 /app/data /app/logs /app/exports && \
     chmod -R 775 /app/data
 
+# Set proper permissions for volumes (will be overridden by mount, but good practice)
+RUN mkdir -p /app/data-template /app/logs-template /app/exports-template && \
+    chown dommate:dommate /app/data-template /app/logs-template /app/exports-template && \
+    chmod 755 /app/data-template /app/logs-template /app/exports-template
+
 # Copy startup script
 COPY <<EOF /app/entrypoint.sh
 #!/bin/sh
@@ -90,14 +95,40 @@ set -e
 echo "Starting DomMate as user: \$(whoami)"
 echo "Working directory: \$(pwd)"
 
-# Ensure directories exist with proper permissions
-echo "Ensuring directory permissions..."
-mkdir -p /app/data /app/logs /app/exports /app/data/backups || true
-chmod -R 755 /app/data /app/logs /app/exports || true
+# Handle Volume mount permissions (common Docker issue)
+echo "Handling volume permissions..."
+
+# Create directories if they don't exist (suppress errors for existing)
+mkdir -p /app/data /app/logs /app/exports /app/data/backups 2>/dev/null || true
+
+# Try to fix permissions if possible (fail silently if not)
+if [ -w /app/data ]; then
+    chmod 755 /app/data 2>/dev/null || true
+    chmod 755 /app/data/backups 2>/dev/null || true
+fi
+
+if [ -w /app/logs ]; then
+    chmod 755 /app/logs 2>/dev/null || true  
+fi
+
+if [ -w /app/exports ]; then
+    chmod 755 /app/exports 2>/dev/null || true
+fi
 
 # Verify directory permissions
 echo "Directory permissions:"
-ls -la /app/data
+ls -la /app/data 2>/dev/null || echo "Cannot read /app/data directory"
+
+# Check frontend files
+echo "Checking frontend files:"
+if [ -f "/app/dist/index.html" ]; then
+    echo "✅ Frontend index.html found"
+    ls -la /app/dist/ | head -5
+else  
+    echo "❌ Frontend index.html NOT found"
+    echo "Available files in /app:"
+    ls -la /app/ | head -10
+fi
 
 # Log startup information
 echo "NODE_ENV: \$NODE_ENV"
