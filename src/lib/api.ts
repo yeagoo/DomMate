@@ -1,6 +1,6 @@
 import type { Domain, ImportResult } from '@/types/domain';
 
-const API_BASE_URL = 'http://localhost:3001/api';
+const API_BASE_URL = '/api';
 
 class ApiService {
   private getSessionId(): string | null {

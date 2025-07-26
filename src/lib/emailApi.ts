@@ -17,7 +17,7 @@ import type {
   EmailSendResult
 } from '@/types/email';
 
-const API_BASE = 'http://localhost:3001/api/email';
+const API_BASE = '/api/email';
 
 class EmailApiClient {
   private async request<T>(
