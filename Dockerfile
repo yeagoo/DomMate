@@ -78,16 +78,19 @@ COPY <<EOF /app/entrypoint.sh
 #!/bin/sh
 set -e
 
-# Create directories if they don't exist
+echo "Starting DomMate as user: \$(whoami)"
+echo "Working directory: \$(pwd)"
+
+# Create directories if they don't exist (already owned by dommate)
 mkdir -p /app/data /app/logs /app/exports /app/data/backups
 
-# Set timezone if TZ is provided
-if [ -n "\$TZ" ]; then
-    ln -snf /usr/share/zoneinfo/\$TZ /etc/localtime
-    echo \$TZ > /etc/timezone
-fi
+# Log startup information
+echo "NODE_ENV: \$NODE_ENV"
+echo "PORT: \$PORT"
+echo "DATABASE_PATH: \$DATABASE_PATH"
 
 # Start application directly (user already switched via USER directive)
+echo "Starting Node.js application..."
 exec node server/index.js
 EOF
 
@@ -96,6 +99,9 @@ RUN chmod +x /app/entrypoint.sh
 
 # Switch to non-root user
 USER dommate
+
+# Verify user and permissions
+RUN whoami && ls -la /app && ls -la /app/data
 
 # Expose ports
 EXPOSE 3001
