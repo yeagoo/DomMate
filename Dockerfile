@@ -71,7 +71,8 @@ COPY env.example ./
 # Create necessary directories with proper ownership
 RUN mkdir -p /app/data /app/logs /app/exports /app/data/backups && \
     chown -R dommate:dommate /app && \
-    chmod -R 755 /app/data /app/logs /app/exports
+    chmod -R 755 /app/data /app/logs /app/exports && \
+    chmod -R 775 /app/data
 
 # Copy startup script
 COPY <<EOF /app/entrypoint.sh
@@ -81,8 +82,14 @@ set -e
 echo "Starting DomMate as user: \$(whoami)"
 echo "Working directory: \$(pwd)"
 
-# Create directories if they don't exist (already owned by dommate)
-mkdir -p /app/data /app/logs /app/exports /app/data/backups
+# Ensure directories exist with proper permissions
+echo "Ensuring directory permissions..."
+mkdir -p /app/data /app/logs /app/exports /app/data/backups || true
+chmod -R 755 /app/data /app/logs /app/exports || true
+
+# Verify directory permissions
+echo "Directory permissions:"
+ls -la /app/data
 
 # Log startup information
 echo "NODE_ENV: \$NODE_ENV"
