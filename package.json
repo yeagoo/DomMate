@@ -21,6 +21,8 @@
     "preview": "astro preview",
     "astro": "astro",
     "typecheck": "astro check",
+    "fix-nav": "node fix-navigation.js",
+    "build-static": "node build-static.js",
     "server": "node server/index.js",
     "server:dev": "node --watch server/index.js"
   },
