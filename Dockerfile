@@ -133,6 +133,13 @@ echo "Checking frontend files:"
 if [ -f "/app/dist/index.html" ]; then
     echo "✅ Frontend index.html found"
     ls -la /app/dist/ | head -5
+    echo "Checking _astro directory:"
+    if [ -d "/app/dist/_astro" ]; then
+        echo "✅ _astro directory found"
+        ls -la /app/dist/_astro/ | head -3
+    else
+        echo "❌ _astro directory missing"
+    fi
 else  
     echo "❌ Frontend index.html NOT found"
     echo "Available files in /app:"
