@@ -85,9 +85,36 @@ app.use(cors());
 app.use(express.json());
 
 // 静态文件服务 - 为前端提供服务
+// 注意：顺序很重要，静态文件路由要在SPA路由之前
+
+// Astro生成的静态资源 (/_astro/xxx.js 文件)
+app.use('/_astro', express.static(path.join(process.cwd(), 'dist/_astro'), {
+  setHeaders: (res, path) => {
+    // 设置正确的MIME类型
+    if (path.endsWith('.js')) {
+      res.setHeader('Content-Type', 'application/javascript');
+    } else if (path.endsWith('.css')) {
+      res.setHeader('Content-Type', 'text/css');
+    }
+  }
+}));
+
+// 其他静态资源
 app.use('/assets', express.static(path.join(process.cwd(), 'dist/assets')));
 app.use('/favicon.svg', express.static(path.join(process.cwd(), 'public/favicon.svg')));
 app.use('/logo.svg', express.static(path.join(process.cwd(), 'public/logo.svg')));
+
+// 直接提供根目录的静态文件 (如果有的话)
+app.use(express.static(path.join(process.cwd(), 'dist'), {
+  index: false,  // 不自动服务index.html，让SPA路由处理
+  setHeaders: (res, path) => {
+    if (path.endsWith('.js')) {
+      res.setHeader('Content-Type', 'application/javascript');
+    } else if (path.endsWith('.css')) {
+      res.setHeader('Content-Type', 'text/css');
+    }
+  }
+}));
 
 // ========== 认证相关 API ==========
 
@@ -2119,11 +2146,22 @@ cron.schedule('0 2 * * *', async () => {
 });
 
 // ========== 前端路由处理 ==========
-// 为所有非API请求提供前端index.html (SPA路由支持)
+// 为所有非API和非静态资源请求提供前端index.html (SPA路由支持)
 app.get('*', (req, res) => {
   // 排除API请求
   if (req.path.startsWith('/api/')) {
     return res.status(404).json({ error: 'API端点不存在' });
+  }
+  
+  // 排除静态资源请求 (避免拦截JavaScript/CSS文件)
+  if (req.path.startsWith('/_astro/') || 
+      req.path.startsWith('/assets/') ||
+      req.path.endsWith('.js') || 
+      req.path.endsWith('.css') ||
+      req.path.endsWith('.svg') ||
+      req.path.endsWith('.png') ||
+      req.path.endsWith('.ico')) {
+    return res.status(404).send('Static file not found');
   }
   
   // 为前端路由提供index.html
