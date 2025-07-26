@@ -84,6 +84,11 @@ async function whoisWithRetry(domain, maxRetries = 3, timeout = 15000) {
 app.use(cors());
 app.use(express.json());
 
+// 静态文件服务 - 为前端提供服务
+app.use('/assets', express.static(path.join(process.cwd(), 'dist/assets')));
+app.use('/favicon.svg', express.static(path.join(process.cwd(), 'public/favicon.svg')));
+app.use('/logo.svg', express.static(path.join(process.cwd(), 'public/logo.svg')));
+
 // ========== 认证相关 API ==========
 
 // 获取登录信息（检查是否需要验证码等）
@@ -2113,11 +2118,54 @@ cron.schedule('0 2 * * *', async () => {
   console.log('定时更新完成');
 });
 
+// ========== 前端路由处理 ==========
+// 为所有非API请求提供前端index.html (SPA路由支持)
+app.get('*', (req, res) => {
+  // 排除API请求
+  if (req.path.startsWith('/api/')) {
+    return res.status(404).json({ error: 'API端点不存在' });
+  }
+  
+  // 为前端路由提供index.html
+  const indexPath = path.join(process.cwd(), 'dist/index.html');
+  if (fsSync.existsSync(indexPath)) {
+    res.sendFile(indexPath);
+  } else {
+    res.status(404).send(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>DomMate - 加载中</title>
+          <meta charset="utf-8">
+          <style>
+            body { font-family: Arial, sans-serif; text-align: center; padding: 50px; }
+            .loading { color: #666; }
+          </style>
+        </head>
+        <body>
+          <h1>DomMate</h1>
+          <p class="loading">前端文件加载中，请稍候...</p>
+          <p>如果长时间无响应，请检查容器构建是否正确包含前端文件。</p>
+        </body>
+      </html>
+    `);
+  }
+});
+
 app.listen(PORT, async () => {
   await db.init();
   await initializeDynamicTasks(); // 初始化动态定时任务
   console.log(`服务器运行在端口 ${PORT}`);
   console.log(`API 地址: http://localhost:${PORT}/api`);
+  console.log(`前端页面: http://localhost:${PORT}`);
+  
+  // 检查前端文件是否存在
+  const indexPath = path.join(process.cwd(), 'dist/index.html');
+  if (fsSync.existsSync(indexPath)) {
+    console.log('✅ 前端文件已加载');
+  } else {
+    console.log('⚠️  前端文件未找到，仅提供API服务');
+  }
 }); 
 
 // 获取域名统计

@@ -57,13 +57,70 @@
 
 ## 🚀 快速开始
 
-### 环境要求
+### 🐳 Docker 部署 (推荐)
+
+最简单快速的部署方式，一条命令即可启动：
+
+```bash
+# 使用官方镜像快速启动
+docker run -d \
+  --name dommate \
+  -p 3001:3001 \
+  -v dommate-data:/app/data \
+  -v dommate-logs:/app/logs \
+  -v dommate-exports:/app/exports \
+  ghcr.io/yeagoo/dommate:latest
+
+# 等待几秒钟让服务启动，然后访问
+# 前端界面: http://localhost:3001
+# API接口: http://localhost:3001/api
+```
+
+**使用 Docker Compose (推荐生产环境)：**
+
+```yaml
+# docker-compose.yml
+version: '3.8'
+services:
+  dommate:
+    image: ghcr.io/yeagoo/dommate:latest
+    container_name: dommate
+    ports:
+      - "3001:3001"
+    volumes:
+      - dommate-data:/app/data
+      - dommate-logs:/app/logs
+      - dommate-exports:/app/exports
+    environment:
+      - NODE_ENV=production
+      - TZ=Asia/Shanghai  # 设置时区
+    restart: unless-stopped
+
+volumes:
+  dommate-data:
+  dommate-logs:
+  dommate-exports:
+```
+
+```bash
+# 启动服务
+docker-compose up -d
+
+# 查看日志
+docker-compose logs -f dommate
+```
+
+### 📦 传统安装方式
+
+如果您偏好源码安装：
+
+#### 环境要求
 
 - **Node.js** >= 16.0.0
 - **npm** >= 7.0.0
 - **Git** (用于克隆仓库)
 
-### 安装步骤
+#### 安装步骤
 
 ```bash
 # 克隆仓库
@@ -80,12 +137,27 @@ node server/index.js
 npm run dev
 ```
 
-### 首次访问
+### 🎯 首次访问
 
-1. **打开浏览器** 并导航到 `http://localhost:4322`
+1. **打开浏览器** 并导航到：
+   - **Docker部署**: `http://localhost:3001` (前端+后端)
+   - **源码安装**: `http://localhost:4322` (前端) + `http://localhost:3001` (后端)
 2. **登录** 使用默认密码: `admin123`
 3. **立即更改密码** 以确保安全
 4. **开始添加域名** 进行监控
+
+### ⚡ 快速测试
+
+```bash
+# 检查前端页面
+curl http://localhost:3001
+
+# 检查API服务状态
+curl http://localhost:3001/api/auth/info
+
+# 预期API返回
+{"requiresAuth": true, "hasUsers": true}
+```
 
 ## 📦 项目结构
 
@@ -222,24 +294,29 @@ X-Session-Id: session-token
 }
 ```
 
-## 🐳 部署
+## 🐳 生产部署
 
-### Docker 部署
+### 自定义 Docker 构建
+
+如果您需要修改源码并构建自己的镜像：
 
 ```bash
-# 构建镜像
-docker build -t dommate:latest .
+# 克隆仓库
+git clone https://github.com/yeagoo/DomMate.git
+cd DomMate
 
-# 运行容器
+# 构建自定义镜像
+docker build -t dommate-custom:latest .
+
+# 运行自定义镜像
 docker run -d \
-  --name dommate \
+  --name dommate-custom \
   -p 3001:3001 \
-  -p 4322:4322 \
-  -v $(pwd)/data:/app/data \
-  dommate:latest
+  -v dommate-data:/app/data \
+  dommate-custom:latest
 ```
 
-### PM2 部署
+### PM2 部署 (源码部署)
 
 ```bash
 # 安装PM2
@@ -264,6 +341,21 @@ npm run build
 
 # 使用静态服务器提供服务
 npm run preview
+```
+
+### Docker 健康检查
+
+Docker镜像内置健康检查，可以监控服务状态：
+
+```bash
+# 检查容器健康状态
+docker ps
+
+# 查看健康检查详情
+docker inspect dommate --format='{{.State.Health}}'
+
+# 查看健康检查日志
+docker logs dommate
 ```
 
 ## 🧪 测试
