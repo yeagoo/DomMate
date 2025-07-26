@@ -150,12 +150,13 @@ if [ -f "/app/dist/index.html" ]; then
     echo "✅ Frontend index.html found"
     ls -la /app/dist/ | head -5
     echo "Checking for additional pages:"
-    for page in groups.html analytics.html email.html; do
+    for page in groups/index.html analytics/index.html email/index.html; do
         if [ -f "/app/dist/$page" ]; then
             echo "✅ $page found"
         else
             echo "⚠️  $page missing - creating fallback"
-            cp /app/dist/index.html /app/dist/$page
+            mkdir -p "/app/dist/$(dirname $page)"
+            cp /app/dist/index.html "/app/dist/$page"
         fi
     done
     echo "Checking _astro directory:"

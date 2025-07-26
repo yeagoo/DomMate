@@ -2167,16 +2167,16 @@ app.get('*', (req, res) => {
   // 处理多页面路由 - 查找对应的HTML文件
   let htmlFile = 'index.html'; // 默认首页
   
-  // 路由映射
+  // 路由映射 - 匹配Astro静态构建的文件结构
   const routeMap = {
     '/': 'index.html',
-    '/groups': 'groups.html', 
-    '/analytics': 'analytics.html',
-    '/email': 'email.html',
+    '/groups': 'groups/index.html', 
+    '/analytics': 'analytics/index.html',
+    '/email': 'email/index.html',
     '/en': 'en/index.html',
-    '/en/groups': 'en/groups.html',
-    '/en/analytics': 'en/analytics.html', 
-    '/en/email': 'en/email.html'
+    '/en/groups': 'en/groups/index.html',
+    '/en/analytics': 'en/analytics/index.html', 
+    '/en/email': 'en/email/index.html'
   };
 
   // 查找对应的HTML文件

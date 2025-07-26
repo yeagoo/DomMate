@@ -7,23 +7,32 @@ import { AnalyticsDashboard } from './AnalyticsDashboard';
 import { EmailDashboard } from './EmailDashboard';
 
 const DashboardWithAuth: React.FC<{ language?: 'zh' | 'en' }> = ({ language = 'zh' }) => {
-  const [currentPath, setCurrentPath] = useState(window.location.pathname);
+  const [currentPath, setCurrentPath] = useState('/'); // 默认首页，客户端会更新
 
-  // 监听URL变化（浏览器前进后退）
+  // 初始化当前路径并监听URL变化
   useEffect(() => {
-    const handlePopState = () => {
+    // 在客户端初始化时设置当前路径
+    if (typeof window !== 'undefined') {
       setCurrentPath(window.location.pathname);
+    }
+
+    const handlePopState = () => {
+      if (typeof window !== 'undefined') {
+        setCurrentPath(window.location.pathname);
+      }
     };
 
-    window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
+    if (typeof window !== 'undefined') {
+      window.addEventListener('popstate', handlePopState);
+      return () => window.removeEventListener('popstate', handlePopState);
+    }
   }, []);
 
   // 监听页面内链接点击
   useEffect(() => {
     const handleLinkClick = (e: Event) => {
       const target = e.target as HTMLAnchorElement;
-      if (target.tagName === 'A' && target.href) {
+      if (target.tagName === 'A' && target.href && typeof window !== 'undefined') {
         const url = new URL(target.href);
         // 检查是否是内部链接
         if (url.origin === window.location.origin) {
@@ -37,8 +46,10 @@ const DashboardWithAuth: React.FC<{ language?: 'zh' | 'en' }> = ({ language = 'z
       }
     };
 
-    document.addEventListener('click', handleLinkClick);
-    return () => document.removeEventListener('click', handleLinkClick);
+    if (typeof document !== 'undefined') {
+      document.addEventListener('click', handleLinkClick);
+      return () => document.removeEventListener('click', handleLinkClick);
+    }
   }, [currentPath]);
 
   // 根据当前路径渲染对应的组件
