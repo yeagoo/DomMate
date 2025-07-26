@@ -22,6 +22,11 @@ COPY . .
 # Build frontend
 RUN npm run build
 
+# List build output for debugging
+RUN echo "=== Frontend Build Output ===" && \
+    ls -la ./dist/ && \
+    echo "=== Build Complete ==="
+
 # ================================
 # Production stage
 # ================================
@@ -69,11 +74,15 @@ COPY domain-config.js ./
 COPY env.example ./
 
 # Verify frontend build
-RUN ls -la ./dist && \
+RUN echo "=== Verifying Frontend Build ===" && \
+    ls -la ./dist && \
     if [ -f "./dist/index.html" ]; then \
         echo "✅ Frontend build found"; \
+        echo "Index.html size: $(stat -c%s ./dist/index.html) bytes"; \
     else \
-        echo "⚠️  Frontend build missing"; \
+        echo "❌ Frontend build missing index.html"; \
+        echo "Available files in dist:"; \
+        find ./dist -type f | head -10; \
     fi
 
 # Create necessary directories with proper ownership
@@ -81,6 +90,11 @@ RUN mkdir -p /app/data /app/logs /app/exports /app/data/backups && \
     chown -R dommate:dommate /app && \
     chmod -R 755 /app/data /app/logs /app/exports && \
     chmod -R 775 /app/data
+
+# Set proper permissions for volumes (will be overridden by mount, but good practice)
+RUN mkdir -p /app/data-template /app/logs-template /app/exports-template && \
+    chown dommate:dommate /app/data-template /app/logs-template /app/exports-template && \
+    chmod 755 /app/data-template /app/logs-template /app/exports-template
 
 # Copy startup script
 COPY <<EOF /app/entrypoint.sh
@@ -90,14 +104,40 @@ set -e
 echo "Starting DomMate as user: \$(whoami)"
 echo "Working directory: \$(pwd)"
 
-# Ensure directories exist with proper permissions
-echo "Ensuring directory permissions..."
-mkdir -p /app/data /app/logs /app/exports /app/data/backups || true
-chmod -R 755 /app/data /app/logs /app/exports || true
+# Handle Volume mount permissions (common Docker issue)
+echo "Handling volume permissions..."
+
+# Create directories if they don't exist (suppress errors for existing)
+mkdir -p /app/data /app/logs /app/exports /app/data/backups 2>/dev/null || true
+
+# Try to fix permissions if possible (fail silently if not)
+if [ -w /app/data ]; then
+    chmod 755 /app/data 2>/dev/null || true
+    chmod 755 /app/data/backups 2>/dev/null || true
+fi
+
+if [ -w /app/logs ]; then
+    chmod 755 /app/logs 2>/dev/null || true  
+fi
+
+if [ -w /app/exports ]; then
+    chmod 755 /app/exports 2>/dev/null || true
+fi
 
 # Verify directory permissions
 echo "Directory permissions:"
-ls -la /app/data
+ls -la /app/data 2>/dev/null || echo "Cannot read /app/data directory"
+
+# Check frontend files
+echo "Checking frontend files:"
+if [ -f "/app/dist/index.html" ]; then
+    echo "✅ Frontend index.html found"
+    ls -la /app/dist/ | head -5
+else  
+    echo "❌ Frontend index.html NOT found"
+    echo "Available files in /app:"
+    ls -la /app/ | head -10
+fi
 
 # Log startup information
 echo "NODE_ENV: \$NODE_ENV"

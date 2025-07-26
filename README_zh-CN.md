@@ -62,13 +62,16 @@
 最简单快速的部署方式，一条命令即可启动：
 
 ```bash
-# 使用官方镜像快速启动
+# 使用官方镜像快速启动（解决权限问题）
 docker run -d \
   --name dommate \
   -p 3001:3001 \
+  --user 1000:1000 \
+  --init \
   -v dommate-data:/app/data \
   -v dommate-logs:/app/logs \
   -v dommate-exports:/app/exports \
+  -e TZ=Asia/Shanghai \
   ghcr.io/yeagoo/dommate:latest
 
 # 等待几秒钟让服务启动，然后访问
@@ -76,39 +79,32 @@ docker run -d \
 # API接口: http://localhost:3001/api
 ```
 
+> **💡 权限说明**：添加 `--user 1000:1000` 和 `--init` 参数可以解决Docker Volume权限问题。
+
 **使用 Docker Compose (推荐生产环境)：**
 
-```yaml
-# docker-compose.yml
-version: '3.8'
-services:
-  dommate:
-    image: ghcr.io/yeagoo/dommate:latest
-    container_name: dommate
-    ports:
-      - "3001:3001"
-    volumes:
-      - dommate-data:/app/data
-      - dommate-logs:/app/logs
-      - dommate-exports:/app/exports
-    environment:
-      - NODE_ENV=production
-      - TZ=Asia/Shanghai  # 设置时区
-    restart: unless-stopped
-
-volumes:
-  dommate-data:
-  dommate-logs:
-  dommate-exports:
-```
+项目已包含 `docker-compose.yml` 文件，直接使用：
 
 ```bash
+# 下载配置文件（如果需要）
+curl -o docker-compose.yml https://raw.githubusercontent.com/yeagoo/DomMate/main/docker-compose.yml
+
 # 启动服务
 docker-compose up -d
 
 # 查看日志
 docker-compose logs -f dommate
+
+# 检查服务状态
+docker-compose ps
 ```
+
+**Docker Compose 配置包含：**
+- ✅ 自动重启策略
+- ✅ 健康检查配置
+- ✅ 权限问题处理
+- ✅ 时区设置
+- ✅ Volume数据持久化
 
 ### 📦 传统安装方式
 

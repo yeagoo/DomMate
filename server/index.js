@@ -2128,24 +2128,57 @@ app.get('*', (req, res) => {
   
   // 为前端路由提供index.html
   const indexPath = path.join(process.cwd(), 'dist/index.html');
+  
+  console.log(`尝试加载前端文件: ${indexPath}`);
+  console.log(`文件是否存在: ${fsSync.existsSync(indexPath)}`);
+  
   if (fsSync.existsSync(indexPath)) {
     res.sendFile(indexPath);
   } else {
+    // 列出可用文件进行调试
+    console.log('前端文件未找到，当前目录内容:');
+    try {
+      const files = fsSync.readdirSync(process.cwd());
+      console.log('根目录:', files);
+      if (files.includes('dist')) {
+        const distFiles = fsSync.readdirSync(path.join(process.cwd(), 'dist'));
+        console.log('dist目录:', distFiles);
+      }
+    } catch (e) {
+      console.log('无法读取目录:', e.message);
+    }
+    
     res.status(404).send(`
       <!DOCTYPE html>
       <html>
         <head>
-          <title>DomMate - 加载中</title>
+          <title>DomMate - 前端文件缺失</title>
           <meta charset="utf-8">
           <style>
-            body { font-family: Arial, sans-serif; text-align: center; padding: 50px; }
-            .loading { color: #666; }
+            body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background: #f5f5f5; }
+            .error { color: #d73502; background: white; padding: 20px; border-radius: 8px; margin: 20px auto; max-width: 600px; }
+            .info { color: #666; margin: 10px 0; }
+            .path { background: #eee; padding: 5px 10px; border-radius: 4px; font-family: monospace; }
           </style>
         </head>
         <body>
-          <h1>DomMate</h1>
-          <p class="loading">前端文件加载中，请稍候...</p>
-          <p>如果长时间无响应，请检查容器构建是否正确包含前端文件。</p>
+          <h1>🚀 DomMate</h1>
+          <div class="error">
+            <h2>❌ 前端文件未找到</h2>
+            <p class="info">正在寻找文件: <span class="path">${indexPath}</span></p>
+            <p class="info">但是API服务正常运行在: <span class="path">http://localhost:3001/api</span></p>
+            
+            <h3>🔧 可能的解决方案:</h3>
+            <ul style="text-align: left; max-width: 500px; margin: 0 auto;">
+              <li>重新构建Docker镜像确保前端文件被正确包含</li>
+              <li>检查前端构建过程是否成功</li>
+              <li>使用最新的官方镜像: <code>ghcr.io/yeagoo/dommate:latest</code></li>
+            </ul>
+            
+            <p style="margin-top: 20px;">
+              <a href="/api/auth/info" style="color: #007bff;">测试API接口 →</a>
+            </p>
+          </div>
         </body>
       </html>
     `);

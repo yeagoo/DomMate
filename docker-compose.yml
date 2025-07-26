@@ -18,12 +18,12 @@ services:
     # Environment variables
     environment:
       - NODE_ENV=production
-      - SERVER_PORT=3001
+      - PORT=3001
+      - TZ=Asia/Shanghai
       - DATABASE_PATH=/app/data/domains.db
       - EXPORT_DIR=/app/exports
       - LOG_FILE=/app/logs/dommate.log
       - DATABASE_BACKUP_DIR=/app/data/backups
-      - TZ=UTC
       - PUID=1000
       - PGID=1000
     
@@ -33,9 +33,10 @@ services:
     
     # Volume mounts for persistent data
     volumes:
-      - dommate_data:/app/data
-      - dommate_logs:/app/logs
-      - dommate_exports:/app/exports
+      # 使用bind mounts而不是named volumes可以更好地控制权限
+      - dommate-data:/app/data
+      - dommate-logs:/app/logs  
+      - dommate-exports:/app/exports
       - dommate_backups:/app/data/backups
     
     # Health check
@@ -44,7 +45,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 60s
+      start_period: 40s
     
     # Security options
     security_opt:
@@ -95,33 +96,14 @@ services:
 
 # Named volumes for persistent data
 volumes:
-  dommate_data:
+  dommate-data:
     driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: ./data
-  
-  dommate_logs:
+  dommate-logs:
     driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: ./logs
-  
-  dommate_exports:
+  dommate-exports:
     driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: ./exports
-  
   dommate_backups:
     driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: ./backups
   
   nginx_cache:
     driver: local

@@ -11,10 +11,10 @@ export default defineConfig({
       applyBaseStyles: false,
     })
   ],
-  output: 'server',
-  adapter: node({
-    mode: 'standalone'
-  }),
+  output: 'static',  // 改为静态构建以生成index.html
+  // adapter: node({    // 静态构建不需要adapter
+  //   mode: 'standalone'
+  // }),
   vite: {
     esbuild: {
       target: 'es2020'
