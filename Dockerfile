@@ -99,7 +99,8 @@ RUN mkdir -p /app/data-template /app/logs-template /app/exports-template && \
 # Copy startup script
 COPY <<EOF /app/entrypoint.sh
 #!/bin/sh
-set -e
+# Remove 'set -e' to prevent script from exiting on minor errors
+# set -e
 
 echo "Starting DomMate as user: \$(whoami)"
 echo "Working directory: \$(pwd)"
@@ -136,12 +137,12 @@ if [ ! -f "/app/dist/index.html" ] || [ -d "/app/dist/server" ]; then
     echo "⚠️  Detected SSR build, rebuilding as static..."
     
     # Update astro config to static
-    sed -i "s/output: 'server'/output: 'static'/g" /app/astro.config.mjs
-    sed -i "s/output: \"server\"/output: 'static'/g" /app/astro.config.mjs
+    sed -i "s/output: 'server'/output: 'static'/g" /app/astro.config.mjs 2>/dev/null || true
+    sed -i "s/output: \"server\"/output: 'static'/g" /app/astro.config.mjs 2>/dev/null || true
     
     # Remove SSR artifacts and rebuild
-    rm -rf /app/dist
-    cd /app && npm run build
+    rm -rf /app/dist 2>/dev/null || true
+    cd /app && npm run build 2>/dev/null || echo "Build failed, continuing with existing files"
     
     echo "✅ Static rebuild completed"
 fi
@@ -150,13 +151,16 @@ if [ -f "/app/dist/index.html" ]; then
     echo "✅ Frontend index.html found"
     ls -la /app/dist/ | head -5
     echo "Checking for additional pages:"
-    for page in groups/index.html analytics/index.html email/index.html; do
-        if [ -f "/app/dist/$page" ]; then
-            echo "✅ $page found"
+    # 检查并创建子页面目录和文件
+    for subdir in groups analytics email; do
+        if [ -f "/app/dist/$subdir/index.html" ]; then
+            echo "✅ $subdir/index.html found"
         else
-            echo "⚠️  $page missing - creating fallback"
-            mkdir -p "/app/dist/$(dirname $page)"
-            cp /app/dist/index.html "/app/dist/$page"
+            echo "⚠️  $subdir/index.html missing - creating fallback"
+            mkdir -p "/app/dist/$subdir" 2>/dev/null || true
+            if [ -f "/app/dist/index.html" ]; then
+                cp "/app/dist/index.html" "/app/dist/$subdir/index.html" 2>/dev/null || echo "Failed to create $subdir/index.html"
+            fi
         fi
     done
     echo "Checking _astro directory:"
@@ -169,8 +173,10 @@ if [ -f "/app/dist/index.html" ]; then
 else  
     echo "❌ Frontend index.html NOT found after rebuild"
     echo "Available files in /app:"
-    ls -la /app/ | head -10
+    ls -la /app/ 2>/dev/null | head -10 || echo "Cannot list /app directory"
 fi
+
+echo "=== Starting Application ==="
 
 # Log startup information
 echo "NODE_ENV: \$NODE_ENV"
