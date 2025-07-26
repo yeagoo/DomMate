@@ -68,29 +68,30 @@ COPY public ./public
 COPY domain-config.js ./
 COPY env.example ./
 
-# Create necessary directories
+# Create necessary directories with proper ownership
 RUN mkdir -p /app/data /app/logs /app/exports /app/data/backups && \
-    chown -R dommate:dommate /app
+    chown -R dommate:dommate /app && \
+    chmod -R 755 /app/data /app/logs /app/exports
 
 # Copy startup script
 COPY <<EOF /app/entrypoint.sh
 #!/bin/sh
 set -e
 
-# Create directories if they don't exist
+echo "Starting DomMate as user: \$(whoami)"
+echo "Working directory: \$(pwd)"
+
+# Create directories if they don't exist (already owned by dommate)
 mkdir -p /app/data /app/logs /app/exports /app/data/backups
 
-# Set proper permissions
-chown -R dommate:dommate /app/data /app/logs /app/exports
+# Log startup information
+echo "NODE_ENV: \$NODE_ENV"
+echo "PORT: \$PORT"
+echo "DATABASE_PATH: \$DATABASE_PATH"
 
-# Set timezone if TZ is provided
-if [ -n "\$TZ" ]; then
-    ln -snf /usr/share/zoneinfo/\$TZ /etc/localtime
-    echo \$TZ > /etc/timezone
-fi
-
-# Change to non-root user and start application
-exec su-exec dommate node server/index.js
+# Start application directly (user already switched via USER directive)
+echo "Starting Node.js application..."
+exec node server/index.js
 EOF
 
 # Make startup script executable
@@ -98,6 +99,9 @@ RUN chmod +x /app/entrypoint.sh
 
 # Switch to non-root user
 USER dommate
+
+# Verify user and permissions
+RUN whoami && ls -la /app && ls -la /app/data
 
 # Expose ports
 EXPOSE 3001
