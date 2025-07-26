@@ -2204,7 +2204,7 @@ app.get('*', (req, res) => {
           <div class="error">
             <h2>❌ 前端文件未找到</h2>
             <p class="info">正在寻找文件: <span class="path">${indexPath}</span></p>
-            <p class="info">但是API服务正常运行在: <span class="path">http://localhost:3001/api</span></p>
+                            <p class="info">但是API服务正常运行在: <span class="path">/api</span></p>
             
             <h3>🔧 可能的解决方案:</h3>
             <ul style="text-align: left; max-width: 500px; margin: 0 auto;">
@@ -2227,8 +2227,8 @@ app.listen(PORT, async () => {
   await db.init();
   await initializeDynamicTasks(); // 初始化动态定时任务
   console.log(`服务器运行在端口 ${PORT}`);
-  console.log(`API 地址: http://localhost:${PORT}/api`);
-  console.log(`前端页面: http://localhost:${PORT}`);
+      console.log(`API 地址: http://0.0.0.0:${PORT}/api`);
+    console.log(`前端页面: http://0.0.0.0:${PORT}`);
   
   // 检查前端文件是否存在
   const indexPath = path.join(process.cwd(), 'dist/index.html');
