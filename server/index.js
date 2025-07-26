@@ -2146,7 +2146,7 @@ cron.schedule('0 2 * * *', async () => {
 });
 
 // ========== 前端路由处理 ==========
-// 为所有非API和非静态资源请求提供前端index.html (SPA路由支持)
+// 处理Astro静态构建的多页面路由
 app.get('*', (req, res) => {
   // 排除API请求
   if (req.path.startsWith('/api/')) {
@@ -2163,14 +2163,41 @@ app.get('*', (req, res) => {
       req.path.endsWith('.ico')) {
     return res.status(404).send('Static file not found');
   }
+
+  // 处理多页面路由 - 查找对应的HTML文件
+  let htmlFile = 'index.html'; // 默认首页
   
-  // 为前端路由提供index.html
+  // 路由映射
+  const routeMap = {
+    '/': 'index.html',
+    '/groups': 'groups.html', 
+    '/analytics': 'analytics.html',
+    '/email': 'email.html',
+    '/en': 'en/index.html',
+    '/en/groups': 'en/groups.html',
+    '/en/analytics': 'en/analytics.html', 
+    '/en/email': 'en/email.html'
+  };
+
+  // 查找对应的HTML文件
+  if (routeMap[req.path]) {
+    htmlFile = routeMap[req.path];
+  }
+
+  // 尝试提供对应的HTML文件
+  const htmlPath = path.join(process.cwd(), 'dist', htmlFile);
   const indexPath = path.join(process.cwd(), 'dist/index.html');
   
-  console.log(`尝试加载前端文件: ${indexPath}`);
-  console.log(`文件是否存在: ${fsSync.existsSync(indexPath)}`);
+  // 优先提供请求的页面文件，如果不存在则回退到index.html
+  console.log(`尝试加载页面文件: ${req.path} → ${htmlFile}`);
+  console.log(`HTML文件路径: ${htmlPath}`);
+  console.log(`HTML文件是否存在: ${fsSync.existsSync(htmlPath)}`);
   
-  if (fsSync.existsSync(indexPath)) {
+  if (fsSync.existsSync(htmlPath)) {
+    console.log(`✅ 提供页面文件: ${req.path} → ${htmlFile}`);
+    res.sendFile(htmlPath);
+  } else if (fsSync.existsSync(indexPath)) {
+    console.log(`⚠️  页面文件不存在，回退到首页: ${req.path} → index.html`);
     res.sendFile(indexPath);
   } else {
     // 列出可用文件进行调试

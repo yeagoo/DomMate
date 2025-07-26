@@ -128,11 +128,36 @@ fi
 echo "Directory permissions:"
 ls -la /app/data 2>/dev/null || echo "Cannot read /app/data directory"
 
-# Check frontend files
+# Check frontend files and ensure static build
 echo "Checking frontend files:"
+
+# Force static build if needed
+if [ ! -f "/app/dist/index.html" ] || [ -d "/app/dist/server" ]; then
+    echo "⚠️  Detected SSR build, rebuilding as static..."
+    
+    # Update astro config to static
+    sed -i "s/output: 'server'/output: 'static'/g" /app/astro.config.mjs
+    sed -i "s/output: \"server\"/output: 'static'/g" /app/astro.config.mjs
+    
+    # Remove SSR artifacts and rebuild
+    rm -rf /app/dist
+    cd /app && npm run build
+    
+    echo "✅ Static rebuild completed"
+fi
+
 if [ -f "/app/dist/index.html" ]; then
     echo "✅ Frontend index.html found"
     ls -la /app/dist/ | head -5
+    echo "Checking for additional pages:"
+    for page in groups.html analytics.html email.html; do
+        if [ -f "/app/dist/$page" ]; then
+            echo "✅ $page found"
+        else
+            echo "⚠️  $page missing - creating fallback"
+            cp /app/dist/index.html /app/dist/$page
+        fi
+    done
     echo "Checking _astro directory:"
     if [ -d "/app/dist/_astro" ]; then
         echo "✅ _astro directory found"
@@ -141,7 +166,7 @@ if [ -f "/app/dist/index.html" ]; then
         echo "❌ _astro directory missing"
     fi
 else  
-    echo "❌ Frontend index.html NOT found"
+    echo "❌ Frontend index.html NOT found after rebuild"
     echo "Available files in /app:"
     ls -la /app/ | head -10
 fi
