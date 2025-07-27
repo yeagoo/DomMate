@@ -33,18 +33,17 @@ services:
     
     # Volume mounts for persistent data
     volumes:
-      # 使用bind mounts而不是named volumes可以更好地控制权限
-      - dommate-data:/app/data
-      - dommate-logs:/app/logs  
-      - dommate-exports:/app/exports
-      - dommate_backups:/app/data/backups
+      # 数据持久化卷
+      - dommate-data:/app/data      # 数据库和配置文件
+      - dommate-logs:/app/logs      # 应用日志
+      - dommate-exports:/app/exports # 导出文件
     
     # Health check
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3001/api/auth/info"]
       interval: 30s
-      timeout: 10s
-      retries: 3
+      timeout: 15s
+      retries: 5
       start_period: 40s
     
     # Security options
@@ -94,15 +93,13 @@ services:
     networks:
       - dommate_network
 
-# Named volumes for persistent data
+# 命名卷定义
 volumes:
   dommate-data:
     driver: local
   dommate-logs:
-    driver: local
+    driver: local  
   dommate-exports:
-    driver: local
-  dommate_backups:
     driver: local
   
   nginx_cache:

@@ -59,10 +59,14 @@
 
 ### 🐳 Docker 部署 (推荐)
 
-最简单快速的部署方式，一条命令即可启动：
+Docker是最简单、最可靠的部署方式，具有完整的数据持久化和权限处理。
+
+#### 🚀 快速启动
+
+一条命令即可启动完整的DomMate系统：
 
 ```bash
-# 使用官方镜像快速启动（解决权限问题）
+# 使用官方镜像快速启动
 docker run -d \
   --name dommate \
   -p 3001:3001 \
@@ -71,40 +75,173 @@ docker run -d \
   -v dommate-data:/app/data \
   -v dommate-logs:/app/logs \
   -v dommate-exports:/app/exports \
+  -e DATABASE_PATH=/app/data/domains.db \
+  -e EXPORT_DIR=/app/exports \
+  -e LOG_FILE=/app/logs/dommate.log \
   -e TZ=Asia/Shanghai \
   ghcr.io/yeagoo/dommate:latest
 
-# 等待几秒钟让服务启动，然后访问
-# 前端界面: http://localhost:3001
-# API接口: http://localhost:3001/api
+# 等待服务完全启动 (通常需要30-60秒)
+echo "等待服务启动..."
+sleep 30
+
+# 验证服务状态
+docker logs dommate --tail 10
+curl -f http://localhost:3001/api/auth/info
+
+# 访问界面
+echo "✅ 服务已启动！"
+echo "前端界面: http://localhost:3001"
+echo "默认密码: admin123 (首次登录需修改)"
 ```
 
-> **💡 权限说明**：添加 `--user 1000:1000` 和 `--init` 参数可以解决Docker Volume权限问题。
+> **🔑 关键参数说明**：
+> - `--user 1000:1000`: 解决Docker卷权限问题
+> - `--init`: 启用init进程，确保信号处理正确
+> - 环境变量: 确保数据文件存储在正确的持久化目录
 
-**使用 Docker Compose (推荐生产环境)：**
+#### 🐙 Docker Compose (推荐生产环境)
 
-项目已包含 `docker-compose.yml` 文件，直接使用：
+使用Docker Compose可以获得更完整的配置和管理功能：
 
 ```bash
-# 下载配置文件（如果需要）
+# 下载官方配置文件
 curl -o docker-compose.yml https://raw.githubusercontent.com/yeagoo/DomMate/main/docker-compose.yml
 
 # 启动服务
 docker-compose up -d
 
-# 查看日志
+# 查看启动日志
 docker-compose logs -f dommate
 
 # 检查服务状态
 docker-compose ps
 ```
 
-**Docker Compose 配置包含：**
-- ✅ 自动重启策略
-- ✅ 健康检查配置
-- ✅ 权限问题处理
-- ✅ 时区设置
-- ✅ Volume数据持久化
+**Docker Compose优势**：
+- ✅ **自动重启策略**: 容器异常退出自动重启
+- ✅ **健康检查**: 自动监控服务状态
+- ✅ **权限处理**: 自动处理文件权限问题
+- ✅ **数据持久化**: 完整的数据、日志、导出文件持久化
+- ✅ **时区配置**: 自动设置亚洲/上海时区
+- ✅ **网络隔离**: 独立网络保障安全
+- ✅ **资源限制**: 可配置CPU和内存限制
+
+**生产环境配置示例**：
+
+```yaml
+services:
+  dommate:
+    image: ghcr.io/yeagoo/dommate:latest
+    container_name: dommate
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    user: "1000:1000"
+    init: true
+    environment:
+      - NODE_ENV=production
+      - DATABASE_PATH=/app/data/domains.db
+      - EXPORT_DIR=/app/exports
+      - LOG_FILE=/app/logs/dommate.log
+      - TZ=Asia/Shanghai
+    volumes:
+      - dommate-data:/app/data
+      - dommate-logs:/app/logs
+      - dommate-exports:/app/exports
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/api/auth/info"]
+      interval: 30s
+      timeout: 15s
+      retries: 5
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+
+volumes:
+  dommate-data:
+  dommate-logs:
+  dommate-exports:
+```
+
+#### 🔧 Docker权限问题修复
+
+如果遇到数据持久化或权限问题，使用我们提供的自动修复脚本：
+
+```bash
+# 下载权限修复脚本
+curl -o docker-fix-permissions.sh https://raw.githubusercontent.com/yeagoo/DomMate/main/docker-fix-permissions.sh
+chmod +x docker-fix-permissions.sh
+
+# 运行权限修复
+./docker-fix-permissions.sh
+
+# 重启容器应用修复
+docker restart dommate
+```
+
+**权限修复脚本功能**：
+- 🔍 **自动检测**: 检查Docker卷状态和权限
+- 🔧 **自动修复**: 使用临时容器修复权限问题
+- ✅ **验证结果**: 自动验证修复效果
+- 📝 **详细日志**: 提供详细的操作日志
+
+#### 📊 监控和维护
+
+**检查服务状态**：
+```bash
+# 查看容器状态
+docker ps | grep dommate
+
+# 查看详细日志
+docker logs dommate --tail 50 -f
+
+# 检查健康状态
+docker inspect dommate --format='{{.State.Health.Status}}'
+
+# 查看资源使用
+docker stats dommate --no-stream
+```
+
+**数据备份**：
+```bash
+# 备份数据卷
+docker run --rm -v dommate-data:/data -v $(pwd):/backup \
+  alpine:latest tar czf /backup/dommate-data-$(date +%Y%m%d).tar.gz -C /data .
+
+# 恢复数据卷（如果需要）
+docker run --rm -v dommate-data:/data -v $(pwd):/backup \
+  alpine:latest tar xzf /backup/dommate-data-20231215.tar.gz -C /data
+```
+
+#### 🚨 故障排除
+
+**常见问题及解决方案**：
+
+| 问题 | 症状 | 解决方案 |
+|------|------|----------|
+| 权限问题 | 数据丢失、无法写入 | 运行 `docker-fix-permissions.sh` |
+| 端口冲突 | 无法启动容器 | 修改端口映射 `-p 3002:3001` |
+| 内存不足 | 容器频繁重启 | 增加内存限制或释放系统内存 |
+| 网络问题 | API调用失败 | 检查防火墙和网络配置 |
+
+**调试命令**：
+```bash
+# 进入容器调试
+docker exec -it dommate sh
+
+# 检查文件权限
+docker exec dommate ls -la /app/data/
+
+# 检查环境变量
+docker exec dommate env | grep -E "(DATABASE|EXPORT|LOG)"
+
+# 手动测试API
+curl -v http://localhost:3001/api/auth/info
+```
 
 ### 📦 传统安装方式
 
@@ -292,7 +429,7 @@ X-Session-Id: session-token
 
 ## 🐳 生产部署
 
-### 自定义 Docker 构建
+### 🛠️ 自定义 Docker 构建
 
 如果您需要修改源码并构建自己的镜像：
 
@@ -304,12 +441,32 @@ cd DomMate
 # 构建自定义镜像
 docker build -t dommate-custom:latest .
 
-# 运行自定义镜像
+# 运行自定义镜像（完整配置）
 docker run -d \
   --name dommate-custom \
   -p 3001:3001 \
+  --user 1000:1000 \
+  --init \
   -v dommate-data:/app/data \
+  -v dommate-logs:/app/logs \
+  -v dommate-exports:/app/exports \
+  -e DATABASE_PATH=/app/data/domains.db \
+  -e EXPORT_DIR=/app/exports \
+  -e LOG_FILE=/app/logs/dommate.log \
+  -e TZ=Asia/Shanghai \
   dommate-custom:latest
+```
+
+**构建优化技巧**：
+```bash
+# 使用构建缓存加速
+docker build --build-arg BUILDKIT_INLINE_CACHE=1 -t dommate-custom:latest .
+
+# 多平台构建
+docker buildx build --platform linux/amd64,linux/arm64 -t dommate-custom:latest .
+
+# 查看镜像大小
+docker images dommate-custom:latest
 ```
 
 ### PM2 部署 (源码部署)
@@ -339,20 +496,36 @@ npm run build
 npm run preview
 ```
 
-### Docker 健康检查
+### 🩺 Docker 健康检查
 
-Docker镜像内置健康检查，可以监控服务状态：
+DomMate镜像内置了完善的健康检查系统：
 
 ```bash
 # 检查容器健康状态
 docker ps
+# STATUS列会显示: healthy 或 unhealthy
 
-# 查看健康检查详情
-docker inspect dommate --format='{{.State.Health}}'
+# 查看详细健康检查信息
+docker inspect dommate --format='{{json .State.Health}}' | jq
 
-# 查看健康检查日志
-docker logs dommate
+# 查看健康检查历史
+docker inspect dommate --format='{{range .State.Health.Log}}{{.Start}} {{.ExitCode}} {{.Output}}{{end}}'
+
+# 手动触发健康检查
+docker exec dommate curl -f http://localhost:3001/api/auth/info
 ```
+
+**健康检查配置**：
+- ✅ **检查间隔**: 30秒
+- ✅ **超时时间**: 15秒  
+- ✅ **失败重试**: 5次
+- ✅ **启动延迟**: 60秒（允许服务完全初始化）
+- ✅ **检查端点**: `/api/auth/info`（轻量级认证信息接口）
+
+**健康状态说明**：
+- `starting`: 服务正在启动中
+- `healthy`: 服务运行正常
+- `unhealthy`: 服务出现问题，需要检查日志
 
 ## 🧪 测试
 
@@ -453,19 +626,90 @@ DomMate 支持多种语言:
 
 ## 🔧 故障排除
 
-### 常见问题
+### Docker相关问题
+
+**Q: 容器重启后数据丢失？**
+A: 确保使用了数据卷挂载并设置了正确的环境变量：
+```bash
+# 检查卷挂载
+docker inspect dommate | grep -A 10 '"Mounts"'
+
+# 检查环境变量
+docker exec dommate env | grep -E "(DATABASE|EXPORT|LOG)"
+
+# 如果数据仍然丢失，运行权限修复脚本
+./docker-fix-permissions.sh
+```
+
+**Q: 权限错误导致无法写入数据？**
+A: 使用权限修复脚本自动解决：
+```bash
+# 下载并运行权限修复脚本
+curl -o docker-fix-permissions.sh https://raw.githubusercontent.com/yeagoo/DomMate/main/docker-fix-permissions.sh
+chmod +x docker-fix-permissions.sh
+./docker-fix-permissions.sh
+```
+
+**Q: 页面显示404或无法访问？**
+A: 检查容器状态和网络配置：
+```bash
+# 检查容器状态
+docker ps | grep dommate
+
+# 查看容器日志
+docker logs dommate --tail 20
+
+# 检查端口映射
+docker port dommate
+
+# 测试API连通性
+curl http://localhost:3001/api/auth/info
+```
+
+### 应用程序问题
 
 **Q: 启动时遇到端口冲突怎么办？**
-A: 检查端口占用并终止相关进程，或修改配置文件中的端口设置。
+A: 检查端口占用并修改端口映射：
+```bash
+# 检查端口占用
+netstat -tulpn | grep :3001
+
+# 使用不同端口启动
+docker run -d --name dommate -p 3002:3001 ... ghcr.io/yeagoo/dommate:latest
+```
 
 **Q: 邮件通知无法发送？**
-A: 检查SMTP配置，确保邮箱密码正确，防火墙允许SMTP端口。
+A: 检查SMTP配置和网络连接：
+```bash
+# 进入容器测试SMTP连接
+docker exec -it dommate sh
+# 在容器内测试：
+# telnet your-smtp-server.com 587
+```
 
 **Q: 忘记登录密码？**
-A: 使用 `./password-admin-tool.sh` 重置密码。
+A: 重置数据库中的密码或重新创建容器：
+```bash
+# 方法1: 删除数据库文件重新初始化
+docker volume rm dommate-data
+docker restart dommate
+
+# 方法2: 使用数据库工具直接修改
+# (需要熟悉SQLite操作)
+```
 
 **Q: 数据库损坏如何恢复？**
-A: 从备份恢复，或删除数据库文件让系统重新创建。
+A: 从备份恢复或重新初始化：
+```bash
+# 从备份恢复（如果有备份）
+docker run --rm -v dommate-data:/data -v $(pwd):/backup \
+  alpine:latest tar xzf /backup/dommate-data-backup.tar.gz -C /data
+
+# 重新初始化数据库
+docker stop dommate
+docker volume rm dommate-data
+docker start dommate
+```
 
 ### 性能优化
 

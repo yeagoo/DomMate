@@ -15,7 +15,8 @@ class ScheduledExportService {
       schedule: '0 2 * * 0', // 每周日凌晨2点
       filename: 'domains_backup'
     };
-    this.configFile = path.join(process.cwd(), 'export-schedule-config.json');
+    const dataDir = process.env.DATABASE_PATH ? path.dirname(process.env.DATABASE_PATH) : path.join(process.cwd(), 'data');
+    this.configFile = path.join(dataDir, 'export-schedule-config.json');
     this.loadConfig();
   }
 
@@ -214,7 +215,8 @@ class ScheduledExportService {
   // 记录导出历史
   recordExportHistory(record) {
     try {
-      const historyFile = path.join(process.cwd(), 'export-history.json');
+      const dataDir = process.env.DATABASE_PATH ? path.dirname(process.env.DATABASE_PATH) : path.join(process.cwd(), 'data');
+      const historyFile = path.join(dataDir, 'export-history.json');
       let history = [];
       
       if (fs.existsSync(historyFile)) {
