@@ -2145,6 +2145,32 @@ cron.schedule('0 2 * * *', async () => {
   console.log('定时更新完成');
 });
 
+// ========== 数据分析API ==========
+// 获取增强的仪表板数据
+app.get('/api/dashboard/analytics', async (req, res) => {
+  try {
+    // 并行获取核心统计数据
+    const [
+      expiryDistribution,
+      monthlyTrend,
+      statusHistory
+    ] = await Promise.all([
+      db.getExpiryDistribution(),
+      db.getMonthlyExpiryTrend(),
+      db.getStatusHistory()
+    ]);
+
+    res.json({
+      expiryDistribution,
+      monthlyTrend,
+      statusHistory
+    });
+  } catch (error) {
+    console.error('获取仪表板数据失败:', error);
+    res.status(500).json({ error: '获取仪表板数据失败: ' + error.message });
+  }
+}); 
+
 // ========== 前端路由处理 ==========
 // 处理Astro静态构建的多页面路由
 app.get('*', (req, res) => {
@@ -2276,31 +2302,6 @@ app.get('/api/domains/stats', async (req, res) => {
     res.status(500).json({ error: '获取统计数据失败: ' + error.message });
   }
 });
-
-// 获取增强的仪表板数据
-app.get('/api/dashboard/analytics', async (req, res) => {
-  try {
-    // 并行获取核心统计数据
-    const [
-      expiryDistribution,
-      monthlyTrend,
-      statusHistory
-    ] = await Promise.all([
-      db.getExpiryDistribution(),
-      db.getMonthlyExpiryTrend(),
-      db.getStatusHistory()
-    ]);
-
-    res.json({
-      expiryDistribution,
-      monthlyTrend,
-      statusHistory
-    });
-  } catch (error) {
-    console.error('获取仪表板数据失败:', error);
-    res.status(500).json({ error: '获取仪表板数据失败: ' + error.message });
-  }
-}); 
 
 // 批量标记重要
 app.post('/api/domains/batch-important', async (req, res) => {

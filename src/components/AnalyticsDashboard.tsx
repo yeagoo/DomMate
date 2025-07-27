@@ -63,8 +63,26 @@ export function AnalyticsDashboard({ language = 'zh' }: AnalyticsDashboardProps)
       setLoading(true);
       setError(null);
       
-      const response = await fetch('/api/dashboard/analytics');
+      // 获取存储的sessionId
+      const sessionId = localStorage.getItem('sessionId');
+      if (!sessionId) {
+        throw new Error('未找到认证信息，请重新登录');
+      }
+      
+      const response = await fetch('/api/dashboard/analytics', {
+        headers: {
+          'X-Session-Id': sessionId,
+          'Content-Type': 'application/json'
+        }
+      });
+      
       if (!response.ok) {
+        if (response.status === 401) {
+          // 认证失败，清除本地认证信息并刷新页面
+          localStorage.removeItem('sessionId');
+          window.location.reload();
+          return;
+        }
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
       
