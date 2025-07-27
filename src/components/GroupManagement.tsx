@@ -335,5 +335,3 @@ function GroupCard({ group, stats, isSystemGroup, language, labels, onEdit, onDe
     </Card>
   );
 } 
-
-export default GroupManagement; 

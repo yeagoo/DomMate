@@ -66,6 +66,8 @@
 
 ### Installation
 
+#### Option 1: Standard Installation
+
 ```bash
 # Clone the repository
 git clone https://github.com/yeagoo/DomMate.git
@@ -79,6 +81,40 @@ node server/index.js
 
 # In a new terminal, start the frontend
 npm run dev
+```
+
+#### Option 2: Docker Installation (Recommended)
+
+```bash
+# Using pre-built image
+curl -O https://raw.githubusercontent.com/yeagoo/DomMate/main/docker-compose.yml
+curl -O https://raw.githubusercontent.com/yeagoo/DomMate/main/env.example
+
+# Configure environment
+cp env.example env.production
+# Edit env.production with your settings
+
+# Create data directories
+mkdir -p docker-data/{data,logs,backups,temp}
+
+# Start the application
+docker-compose up -d
+
+# Access the application at http://localhost:3001
+```
+
+#### Option 3: Build from Source with Docker
+
+```bash
+# Clone and build
+git clone https://github.com/yeagoo/DomMate.git
+cd DomMate
+
+# Configure environment
+cp env.example env.production
+
+# Build and start
+docker-compose up --build -d
 ```
 
 ### First Access
@@ -225,20 +261,90 @@ X-Session-Id: session-token
 
 ## 🐳 Deployment
 
-### Docker Deployment
+### Docker Deployment (Recommended)
+
+DomMate provides complete Docker support with multi-architecture images and automated CI/CD.
+
+#### Quick Start with Docker
 
 ```bash
-# Build the image
-docker build -t dommate:latest .
+# Method 1: Using pre-built images (Recommended)
+curl -O https://raw.githubusercontent.com/yeagoo/DomMate/main/docker-compose.yml
+curl -O https://raw.githubusercontent.com/yeagoo/DomMate/main/env.example
+cp env.example env.production
+# Edit env.production with your settings
+mkdir -p docker-data/{data,logs,backups,temp}
+docker-compose up -d
 
-# Run the container
-docker run -d \
-  --name dommate \
-  -p 3001:3001 \
-  -p 4322:4322 \
-  -v $(pwd)/data:/app/data \
-  dommate:latest
+# Method 2: One-click start script
+./docker-start.sh
+
+# Method 3: Build from source
+git clone https://github.com/yeagoo/DomMate.git
+cd DomMate
+cp env.example env.production
+docker-compose up --build -d
 ```
+
+#### Docker Images
+
+- **GitHub Container Registry**: `ghcr.io/yeagoo/dommate:latest`
+- **Multi-Architecture**: AMD64 and ARM64 support
+- **Automated Builds**: GitHub Actions CI/CD pipeline
+- **Security Scanning**: Trivy vulnerability scanning
+
+#### Docker Features
+
+- 🔒 **Security**: Non-root user, minimal attack surface
+- 📊 **Health Checks**: Comprehensive `/health`, `/ready`, `/live` endpoints
+- 🚀 **Performance**: Multi-stage builds, optimized layers
+- 🔄 **High Availability**: Auto-restart, resource limits
+- 📈 **Monitoring**: Structured logging, metrics collection
+- 🌐 **Reverse Proxy**: Nginx configuration included
+
+#### Environment Configuration
+
+Key environment variables for Docker deployment:
+
+```bash
+# Required settings
+NODE_ENV=production
+SERVER_HOST=0.0.0.0
+SERVER_PORT=3001
+DATABASE_PATH=/app/data/domains.db
+
+# Security (MUST change these!)
+JWT_SECRET=your-super-secret-jwt-key-change-this
+SESSION_SECRET=your-super-secret-session-key-change-this
+
+# Email notifications (optional)
+EMAIL_ENABLED=true
+SMTP_HOST=smtp.gmail.com
+SMTP_USER=your-email@gmail.com
+SMTP_PASS=your-app-password
+```
+
+#### Deployment Options
+
+```bash
+# Standard deployment
+docker-compose up -d
+
+# With Nginx reverse proxy
+docker-compose --profile nginx up -d
+
+# Development mode with admin tools
+docker-compose -f docker-compose.dev.yml --profile admin --profile logs up -d
+
+# Check status and logs
+docker-compose ps
+docker-compose logs -f dommate
+
+# Health check
+curl http://localhost:3001/health
+```
+
+For complete Docker deployment guide, see [DOCKER.md](DOCKER.md).
 
 ### PM2 Deployment
 

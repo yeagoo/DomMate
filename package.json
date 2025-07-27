@@ -17,12 +17,10 @@
   "scripts": {
     "dev": "astro dev",
     "start": "astro dev",
-    "build": "astro build",
+    "build": "astro check && astro build",
     "preview": "astro preview",
     "astro": "astro",
-    "typecheck": "astro check",
-    "fix-nav": "node fix-navigation.js",
-    "build-static": "node build-static.js",
+    "check": "astro check",
     "server": "node server/index.js",
     "server:dev": "node --watch server/index.js"
   },

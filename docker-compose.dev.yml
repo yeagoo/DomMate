@@ -1,154 +1,118 @@
-# ================================
-# DomMate - Development Docker Compose
-# ================================
-
 version: '3.8'
 
 services:
-  # Main DomMate application (development)
-  dommate_dev:
+  # DomMate Application (Development)
+  dommate-dev:
     build:
       context: .
       dockerfile: Dockerfile
       target: production
-    container_name: dommate_dev
+    image: dommate:dev
+    container_name: dommate-dev
     restart: unless-stopped
-    
-    # Port mapping
-    ports:
-      - "3001:3001"
-      - "4322:4322"  # Frontend development server
     
     # Environment variables for development
     environment:
       - NODE_ENV=development
+      - SERVER_HOST=0.0.0.0
       - SERVER_PORT=3001
-      - CLIENT_PORT=4322
       - DATABASE_PATH=/app/data/domains.db
-      - EXPORT_DIR=/app/exports
       - LOG_FILE=/app/logs/dommate.log
-      - DATABASE_BACKUP_DIR=/app/data/backups
-      - DEVELOPMENT_MODE=true
       - DEBUG_MODE=true
-      - CORS_ALLOW_ALL=true
-      - TZ=UTC
-      - PUID=1000
-      - PGID=1000
+      - LOG_LEVEL=debug
+      - ENABLE_DEV_MIDDLEWARE=true
     
-    # Environment file for development
-    env_file:
-      - .env.development
+    # Port mapping
+    ports:
+      - "3001:3001"
     
-    # Volume mounts with source code for development
+    # Volume mounts for development
     volumes:
-      # Persistent data
-      - ./data:/app/data
-      - ./logs:/app/logs
-      - ./exports:/app/exports
-      - ./backups:/app/data/backups
-      
-      # Source code for hot reload (development only)
-      - ./server:/app/server
-      - ./src:/app/src
-      - ./public:/app/public
-      - ./package.json:/app/package.json
-      - ./astro.config.mjs:/app/astro.config.mjs
-      - ./tailwind.config.mjs:/app/tailwind.config.mjs
-      - ./tsconfig.json:/app/tsconfig.json
+      - ./docker-data/dev/data:/app/data
+      - ./docker-data/dev/logs:/app/logs
+      - ./docker-data/dev/backups:/app/backups
+      - ./docker-data/dev/temp:/app/temp
+      # Mount source code for hot reload (if needed)
+      - ./server:/app/server:ro
+      # Mount environment file
+      - ./env.development:/app/.env:ro
     
-    # Development command (with hot reload)
-    command: >
-      sh -c "
-        npm install &&
-        npm run dev &
-        node server/index.js
-      "
-    
-    # Health check
+    # Health check (shorter intervals for dev)
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3001/api/auth/info"]
-      interval: 30s
-      timeout: 10s
+      test: ["CMD", "node", "-e", "const http = require('http'); const options = { host: 'localhost', port: 3001, path: '/health', timeout: 2000 }; const request = http.request(options, (res) => { if (res.statusCode == 200) process.exit(0); else process.exit(1); }); request.on('error', () => process.exit(1)); request.end();"]
+      interval: 15s
+      timeout: 5s
       retries: 3
-      start_period: 60s
+      start_period: 20s
+    
+    # Resource limits (more relaxed for dev)
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
     
     # Networks
     networks:
-      - dommate_dev_network
+      - dommate-dev-network
 
-  # Database development tools (optional)
-  db_admin:
-    image: sqlitebrowser/sqlitebrowser:latest
-    container_name: dommate_db_admin
-    restart: "no"
+  # Database Admin Tool (Optional for development)
+  adminer:
+    image: adminer:latest
+    container_name: dommate-adminer
+    restart: unless-stopped
     
-    # Port for web interface
     ports:
       - "8080:8080"
     
-    # Volume mounts to access database
+    environment:
+      - ADMINER_DEFAULT_SERVER=sqlite
+    
     volumes:
-      - ./data:/data
+      - ./docker-data/dev/data:/app/data:ro
     
-    # Only start when needed
-    profiles:
-      - tools
-    
-    # Networks
     networks:
-      - dommate_dev_network
-
-  # Mail testing server (for development)
-  mailhog:
-    image: mailhog/mailhog:latest
-    container_name: dommate_mailhog
-    restart: "no"
+      - dommate-dev-network
     
-    # Port mapping
-    ports:
-      - "1025:1025"  # SMTP server
-      - "8025:8025"  # Web UI
-    
-    # Only start when needed
     profiles:
-      - mail-testing
-    
-    # Networks
-    networks:
-      - dommate_dev_network
+      - admin
 
-  # Redis for session storage (development)
-  redis:
-    image: redis:alpine
-    container_name: dommate_redis
+  # Log viewer (Optional)
+  dozzle:
+    image: amir20/dozzle:latest
+    container_name: dommate-logs
     restart: unless-stopped
     
-    # Port mapping
     ports:
-      - "6379:6379"
+      - "9999:8080"
     
-    # Command with persistence
-    command: redis-server --appendonly yes
-    
-    # Volume for persistence
     volumes:
-      - redis_data:/data
+      - /var/run/docker.sock:/var/run/docker.sock:ro
     
-    # Only start when needed
-    profiles:
-      - redis
+    environment:
+      - DOZZLE_LEVEL=info
+      - DOZZLE_TAILSIZE=300
     
-    # Networks
     networks:
-      - dommate_dev_network
+      - dommate-dev-network
+    
+    profiles:
+      - logs
 
 # Named volumes for development
 volumes:
-  redis_data:
+  dev-data:
     driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./docker-data/dev/data
 
 # Development network
 networks:
-  dommate_dev_network:
+  dommate-dev-network:
     driver: bridge
-    name: dommate_dev_network 
+    name: dommate-dev 

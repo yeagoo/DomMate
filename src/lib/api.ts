@@ -1,6 +1,6 @@
 import type { Domain, ImportResult } from '@/types/domain';
 
-const API_BASE_URL = '/api';
+const API_BASE_URL = 'http://localhost:3001/api';
 
 class ApiService {
   private getSessionId(): string | null {
@@ -30,7 +30,7 @@ class ApiService {
             localStorage.removeItem('sessionId');
             // 刷新页面到登录界面
             window.location.reload();
-            return undefined as any;
+            return;
           }
         }
         throw new Error(`HTTP error! status: ${response.status}`);

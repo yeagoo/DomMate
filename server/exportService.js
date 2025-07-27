@@ -84,7 +84,7 @@ class ExportService {
   // CSV导出
   async exportToCSV(domains, selectedFields, options = {}) {
     const { filename = 'domains', language = 'zh' } = options;
-    const exportPath = process.env.EXPORT_DIR || path.join(process.cwd(), 'exports');
+    const exportPath = path.join(process.cwd(), 'exports');
     
     // 确保导出目录存在
     if (!fs.existsSync(exportPath)) {
@@ -230,7 +230,7 @@ class ExportService {
   // JSON导出
   async exportToJSON(domains, selectedFields, options = {}) {
     const { filename = 'domains', language = 'zh', includeMetadata = true } = options;
-    const exportPath = process.env.EXPORT_DIR || path.join(process.cwd(), 'exports');
+    const exportPath = path.join(process.cwd(), 'exports');
     
     if (!fs.existsSync(exportPath)) {
       fs.mkdirSync(exportPath, { recursive: true });

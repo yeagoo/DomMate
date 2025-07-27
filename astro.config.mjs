@@ -11,14 +11,11 @@ export default defineConfig({
       applyBaseStyles: false,
     })
   ],
-  output: 'static',  // 改为静态构建以生成index.html
-  // adapter: node({    // 静态构建不需要adapter
-  //   mode: 'standalone'
-  // }),
+  output: 'server',
+  adapter: node({
+    mode: 'standalone'
+  }),
   vite: {
-    esbuild: {
-      target: 'es2020'
-    },
     server: {
       proxy: {
         '/api': {
@@ -29,7 +26,6 @@ export default defineConfig({
       }
     }
   },
-
   i18n: {
     defaultLocale: "zh",
     locales: ["zh", "en"],

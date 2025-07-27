@@ -91,7 +91,7 @@ coverage/
 
 # Gatsby files
 .cache/
-# public - commented out as we need this for Docker build
+public
 
 # Vuepress build output
 .vuepress/dist
@@ -151,11 +151,17 @@ tmp/
 ecosystem.config.js
 .pm2/
 
-# Docker runtime files
-.env
-.env.local
-.env.production
+# Docker data and runtime files
+docker-data/
+.docker/
 docker-compose.override.yml
+docker-compose.local.yml
+env.production
+env.development
+env.staging
+
+# SSL certificates
+ssl/
 
 # Backup files
 *.backup

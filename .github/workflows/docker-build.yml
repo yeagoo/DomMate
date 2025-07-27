@@ -1,12 +1,7 @@
-# ================================
-# DomMate - Docker Build Workflow
-# ================================
-
 name: Build and Push Docker Images
 
-# Trigger conditions
 on:
-  # Build on push to main branch
+  # Trigger on push to main branch
   push:
     branches:
       - main
@@ -14,74 +9,72 @@ on:
     tags:
       - 'v*'
   
-  # Build on pull requests to main
+  # Trigger on pull request to main
   pull_request:
     branches:
       - main
   
-  # Allow manual workflow trigger
+  # Allow manual trigger
   workflow_dispatch:
     inputs:
-      tag:
-        description: 'Docker image tag'
-        required: false
-        default: 'latest'
+      push_to_registry:
+        description: 'Push to Docker Registry'
+        required: true
+        default: 'true'
+        type: boolean
 
 # Environment variables
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: yeagoo/dommate
+  IMAGE_NAME: ${{ github.repository }}
 
-# Jobs
 jobs:
-  # Build and test
-  build:
+  # Build and test the application
+  test:
     runs-on: ubuntu-latest
-    
-    # Permissions for GHCR and security scanning
-    permissions:
-      contents: read
-      packages: write
-      security-events: write
-    
-    # Steps
     steps:
-      # Checkout source code
-      - name: Checkout repository
+      - name: Checkout code
         uses: actions/checkout@v4
-      
-      # Set up Node.js
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '18'
           cache: 'npm'
-      
-      # Install dependencies (fix rollup native module issue)
+
       - name: Install dependencies
-        run: |
-          npm cache clean --force
-          rm -rf node_modules package-lock.json
-          npm install
-      
-      # Run tests (if available)
+        run: npm ci
+
+      - name: Run linter
+        run: npm run lint --if-present
+
       - name: Run tests
-        run: |
-          if [ -f "package.json" ] && grep -q '"test"' package.json; then
-            npm test
-          else
-            echo "No tests found, skipping..."
-          fi
-      
-      # Build frontend
+        run: npm test --if-present
+
       - name: Build frontend
         run: npm run build
-      
-      # Set up Docker Buildx
+
+  # Build Docker image
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    
+    outputs:
+      image-digest: ${{ steps.build.outputs.digest }}
+      image-tags: ${{ steps.meta.outputs.tags }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-      
-      # Log in to Container Registry
+        with:
+          platforms: linux/amd64,linux/arm64
+
       - name: Log in to Container Registry
         if: github.event_name != 'pull_request'
         uses: docker/login-action@v3
@@ -89,180 +82,177 @@ jobs:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      
-      # Extract metadata
+
       - name: Extract metadata
         id: meta
         uses: docker/metadata-action@v5
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            # Set latest tag for default branch
+            # set latest tag for main branch
             type=ref,event=branch
             type=ref,event=pr
-            type=sha,prefix={{branch}}-
-            type=raw,value=latest,enable={{is_default_branch}}
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}
+            type=raw,value=latest,enable={{is_default_branch}}
           labels: |
             org.opencontainers.image.title=DomMate
             org.opencontainers.image.description=Professional Domain Expiration Monitoring Platform
             org.opencontainers.image.vendor=DomMate Team
-            org.opencontainers.image.licenses=MIT
+            org.opencontainers.image.url=https://dommate.com
             org.opencontainers.image.source=https://github.com/yeagoo/DomMate
             org.opencontainers.image.documentation=https://github.com/yeagoo/DomMate/blob/main/README.md
-      
-      # Build and push Docker image
+
       - name: Build and push Docker image
+        id: build
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: ./Dockerfile
           platforms: linux/amd64,linux/arm64
-          push: ${{ github.event_name != 'pull_request' }}
+          push: ${{ github.event_name != 'pull_request' && (github.event_name != 'workflow_dispatch' || github.event.inputs.push_to_registry == 'true') }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          build-args: |
-            BUILDTIME=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.created'] }}
-            VERSION=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.version'] }}
-            REVISION=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.revision'] }}
-      
-      # Test Docker image
-      - name: Test Docker image
-        if: github.event_name != 'pull_request'
-        run: |
-          # Pull the built image
-          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
-          
-          # Run container for testing
-          docker run -d --name dommate-test \
-            -p 3001:3001 \
-            -e NODE_ENV=production \
-            -e PORT=3001 \
-            -v dommate-test-data:/app/data \
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
-          
-          # Check container status
-          echo "=== Container Status ==="
-          docker ps -a
-          
-          # Show container logs
-          echo "=== Container Logs ==="
-          docker logs dommate-test
-          
-          # Wait for container to be ready
-          echo "=== Waiting for service to start ==="
-          for i in {1..12}; do
-            if curl -f http://localhost:3001/api/auth/info 2>/dev/null; then
-              echo "Service is ready!"
-              break
-            fi
-            echo "Attempt $i/12: Service not ready yet, waiting 10s..."
-            sleep 10
-          done
-          
-          # Final test
-          echo "=== Final Health Check ==="
-          curl -f http://localhost:3001/api/auth/info || (
-            echo "=== Final Container Logs ==="
-            docker logs dommate-test
-            exit 1
-          )
-          
-          # Stop test container
-          docker stop dommate-test
-          docker rm dommate-test
-      
-      # Generate SBOM (Software Bill of Materials)
+          provenance: false
+
       - name: Generate SBOM
         if: github.event_name != 'pull_request'
         uses: anchore/sbom-action@v0
         with:
           image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
           format: spdx-json
-          output-file: sbom.spdx.json
-      
-      # Upload SBOM artifact
+          output-file: sbom-spdx.json
+
       - name: Upload SBOM
         if: github.event_name != 'pull_request'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v3
         with:
           name: sbom
-          path: sbom.spdx.json
-      
-      # Security scan with Trivy
+          path: sbom-spdx.json
+
+  # Security scan
+  security-scan:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request'
+    
+    permissions:
+      contents: read
+      security-events: write
+    
+    steps:
       - name: Run Trivy vulnerability scanner
-        if: github.event_name != 'pull_request'
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
           format: 'sarif'
           output: 'trivy-results.sarif'
-      
-      # Upload Trivy scan results
-      - name: Upload Trivy scan results
-        if: github.event_name != 'pull_request'
-        continue-on-error: true
-        uses: github/codeql-action/upload-sarif@v3
+
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v2
+        if: always()
         with:
           sarif_file: 'trivy-results.sarif'
 
-  # Deploy to staging (optional)
-  deploy-staging:
-    # Only run on main branch pushes
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    needs: build
-    runs-on: ubuntu-latest
-    environment: staging
-    
-    steps:
-      - name: Deploy to staging
-        run: |
-          echo "🚀 Deploying to staging environment..."
-          echo "Image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
-          # Add your staging deployment logic here
-          # For example: trigger deployment webhook, update k8s manifests, etc.
-
-  # Create release (on tags)
+  # Create release (only for tags)
   release:
-    if: startsWith(github.ref, 'refs/tags/v')
-    needs: build
+    needs: [build, security-scan]
     runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
     
     permissions:
       contents: write
     
     steps:
-      - name: Checkout repository
+      - name: Checkout code
         uses: actions/checkout@v4
-      
-      - name: Create release
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          fetch-depth: 0
+
+      - name: Generate changelog
+        id: changelog
         run: |
-          gh release create ${{ github.ref_name }} \
-            --title "DomMate ${{ github.ref_name }}" \
-            --notes "## What's Changed
+          # Generate changelog between last two tags
+          PREVIOUS_TAG=$(git tag --sort=-version:refname | sed -n '2p')
+          if [ -z "$PREVIOUS_TAG" ]; then
+            PREVIOUS_TAG=$(git rev-list --max-parents=0 HEAD)
+          fi
+          
+          echo "## What's Changed" > CHANGELOG.md
+          echo "" >> CHANGELOG.md
+          
+          git log --oneline --pretty=format:"- %s (%h)" $PREVIOUS_TAG..HEAD >> CHANGELOG.md
+          
+          echo "" >> CHANGELOG.md
+          echo "## Docker Images" >> CHANGELOG.md
+          echo "" >> CHANGELOG.md
+          echo "- \`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}\`" >> CHANGELOG.md
+          echo "- \`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest\`" >> CHANGELOG.md
+          
+          echo "CHANGELOG<<EOF" >> $GITHUB_OUTPUT
+          cat CHANGELOG.md >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
 
-          Docker image: \`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}\`
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          body: ${{ steps.changelog.outputs.CHANGELOG }}
+          files: |
+            docker-compose.yml
+            env.example
+          generate_release_notes: true
+          make_latest: true
 
-          ### Installation
+  # Deploy to staging (optional)
+  deploy-staging:
+    needs: [build]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
+    
+    environment:
+      name: staging
+      url: https://staging.dommate.com
+    
+    steps:
+      - name: Deploy to staging
+        run: |
+          echo "Deploying to staging environment..."
+          # Add your deployment steps here
+          # For example: SSH to staging server and pull the latest image
 
-          \`\`\`bash
-          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}
-          \`\`\`
+  # Deploy to production (only for main branch)
+  deploy-production:
+    needs: [build, security-scan]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    
+    environment:
+      name: production
+      url: https://dommate.com
+    
+    steps:
+      - name: Deploy to production
+        run: |
+          echo "Deploying to production environment..."
+          # Add your deployment steps here
+          # For example: SSH to production server and pull the latest image
 
-          ### Docker Compose
-
-          \`\`\`yaml
-          services:
-            dommate:
-              image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}
-              # ... other configuration
-          \`\`\`
-
-          See [README.md](README.md) for full installation instructions." \
-            ${{ contains(github.ref_name, '-') && '--prerelease' || '' }} 
+  # Cleanup old images
+  cleanup:
+    needs: [build]
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request'
+    
+    permissions:
+      packages: write
+    
+    steps:
+      - name: Delete old container images
+        uses: actions/delete-package-versions@v4
+        with:
+          package-name: ${{ github.event.repository.name }}
+          package-type: 'container'
+          min-versions-to-keep: 10
+          delete-only-untagged-versions: true 

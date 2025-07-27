@@ -17,7 +17,7 @@ import type {
   EmailSendResult
 } from '@/types/email';
 
-const API_BASE = '/api/email';
+const API_BASE = 'http://localhost:3001/api/email';
 
 class EmailApiClient {
   private async request<T>(
@@ -25,14 +25,9 @@ class EmailApiClient {
     options: RequestInit = {}
   ): Promise<T> {
     const url = `${API_BASE}${endpoint}`;
-    
-    // 获取存储的sessionId用于认证
-    const sessionId = localStorage.getItem('sessionId');
-    
     const config: RequestInit = {
       headers: {
         'Content-Type': 'application/json',
-        ...(sessionId && { 'X-Session-Id': sessionId }),
         ...options.headers,
       },
       ...options,
@@ -41,13 +36,6 @@ class EmailApiClient {
     const response = await fetch(url, config);
     
     if (!response.ok) {
-      // 如果是401认证失败，清理本地会话并刷新页面
-      if (response.status === 401) {
-        localStorage.removeItem('sessionId');
-        window.location.reload();
-        return {} as T; // 这行不会执行，但需要满足TypeScript
-      }
-      
       const errorData = await response.json().catch(() => ({}));
       throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
     }

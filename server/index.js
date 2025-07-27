@@ -14,6 +14,7 @@ import scheduledExportService from './scheduledExport.js';
 import emailService from './emailService.js';
 import cronScheduler from './cronScheduler.js';
 import authService from './authService.js';
+import { setupHealthCheck } from './health-check.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -84,37 +85,8 @@ async function whoisWithRetry(domain, maxRetries = 3, timeout = 15000) {
 app.use(cors());
 app.use(express.json());
 
-// 静态文件服务 - 为前端提供服务
-// 注意：顺序很重要，静态文件路由要在SPA路由之前
-
-// Astro生成的静态资源 (/_astro/xxx.js 文件)
-app.use('/_astro', express.static(path.join(process.cwd(), 'dist/_astro'), {
-  setHeaders: (res, path) => {
-    // 设置正确的MIME类型
-    if (path.endsWith('.js')) {
-      res.setHeader('Content-Type', 'application/javascript');
-    } else if (path.endsWith('.css')) {
-      res.setHeader('Content-Type', 'text/css');
-    }
-  }
-}));
-
-// 其他静态资源
-app.use('/assets', express.static(path.join(process.cwd(), 'dist/assets')));
-app.use('/favicon.svg', express.static(path.join(process.cwd(), 'public/favicon.svg')));
-app.use('/logo.svg', express.static(path.join(process.cwd(), 'public/logo.svg')));
-
-// 直接提供根目录的静态文件 (如果有的话)
-app.use(express.static(path.join(process.cwd(), 'dist'), {
-  index: false,  // 不自动服务index.html，让SPA路由处理
-  setHeaders: (res, path) => {
-    if (path.endsWith('.js')) {
-      res.setHeader('Content-Type', 'application/javascript');
-    } else if (path.endsWith('.css')) {
-      res.setHeader('Content-Type', 'text/css');
-    }
-  }
-}));
+// 设置健康检查端点
+setupHealthCheck(app, db);
 
 // ========== 认证相关 API ==========
 
@@ -2145,7 +2117,24 @@ cron.schedule('0 2 * * *', async () => {
   console.log('定时更新完成');
 });
 
-// ========== 数据分析API ==========
+app.listen(PORT, async () => {
+  await db.init();
+  await initializeDynamicTasks(); // 初始化动态定时任务
+  console.log(`服务器运行在端口 ${PORT}`);
+  console.log(`API 地址: http://localhost:${PORT}/api`);
+}); 
+
+// 获取域名统计
+app.get('/api/domains/stats', async (req, res) => {
+  try {
+    const stats = await db.getDomainStats();
+    res.json(stats);
+  } catch (error) {
+    console.error('获取统计数据失败:', error);
+    res.status(500).json({ error: '获取统计数据失败: ' + error.message });
+  }
+});
+
 // 获取增强的仪表板数据
 app.get('/api/dashboard/analytics', async (req, res) => {
   try {
@@ -2170,138 +2159,6 @@ app.get('/api/dashboard/analytics', async (req, res) => {
     res.status(500).json({ error: '获取仪表板数据失败: ' + error.message });
   }
 }); 
-
-// ========== 前端路由处理 ==========
-// 处理Astro静态构建的多页面路由
-app.get('*', (req, res) => {
-  // 排除API请求
-  if (req.path.startsWith('/api/')) {
-    return res.status(404).json({ error: 'API端点不存在' });
-  }
-  
-  // 排除静态资源请求 (避免拦截JavaScript/CSS文件)
-  if (req.path.startsWith('/_astro/') || 
-      req.path.startsWith('/assets/') ||
-      req.path.endsWith('.js') || 
-      req.path.endsWith('.css') ||
-      req.path.endsWith('.svg') ||
-      req.path.endsWith('.png') ||
-      req.path.endsWith('.ico')) {
-    return res.status(404).send('Static file not found');
-  }
-
-  // 处理多页面路由 - 查找对应的HTML文件
-  let htmlFile = 'index.html'; // 默认首页
-  
-  // 路由映射 - 匹配Astro静态构建的文件结构
-  const routeMap = {
-    '/': 'index.html',
-    '/groups': 'groups/index.html', 
-    '/analytics': 'analytics/index.html',
-    '/email': 'email/index.html',
-    '/en': 'en/index.html',
-    '/en/groups': 'en/groups/index.html',
-    '/en/analytics': 'en/analytics/index.html', 
-    '/en/email': 'en/email/index.html'
-  };
-
-  // 查找对应的HTML文件
-  if (routeMap[req.path]) {
-    htmlFile = routeMap[req.path];
-  }
-
-  // 尝试提供对应的HTML文件
-  const htmlPath = path.join(process.cwd(), 'dist', htmlFile);
-  const indexPath = path.join(process.cwd(), 'dist/index.html');
-  
-  // 优先提供请求的页面文件，如果不存在则回退到index.html
-  console.log(`尝试加载页面文件: ${req.path} → ${htmlFile}`);
-  console.log(`HTML文件路径: ${htmlPath}`);
-  console.log(`HTML文件是否存在: ${fsSync.existsSync(htmlPath)}`);
-  
-  if (fsSync.existsSync(htmlPath)) {
-    console.log(`✅ 提供页面文件: ${req.path} → ${htmlFile}`);
-    res.sendFile(htmlPath);
-  } else if (fsSync.existsSync(indexPath)) {
-    console.log(`⚠️  页面文件不存在，回退到首页: ${req.path} → index.html`);
-    res.sendFile(indexPath);
-  } else {
-    // 列出可用文件进行调试
-    console.log('前端文件未找到，当前目录内容:');
-    try {
-      const files = fsSync.readdirSync(process.cwd());
-      console.log('根目录:', files);
-      if (files.includes('dist')) {
-        const distFiles = fsSync.readdirSync(path.join(process.cwd(), 'dist'));
-        console.log('dist目录:', distFiles);
-      }
-    } catch (e) {
-      console.log('无法读取目录:', e.message);
-    }
-    
-    res.status(404).send(`
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>DomMate - 前端文件缺失</title>
-          <meta charset="utf-8">
-          <style>
-            body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background: #f5f5f5; }
-            .error { color: #d73502; background: white; padding: 20px; border-radius: 8px; margin: 20px auto; max-width: 600px; }
-            .info { color: #666; margin: 10px 0; }
-            .path { background: #eee; padding: 5px 10px; border-radius: 4px; font-family: monospace; }
-          </style>
-        </head>
-        <body>
-          <h1>🚀 DomMate</h1>
-          <div class="error">
-            <h2>❌ 前端文件未找到</h2>
-            <p class="info">正在寻找文件: <span class="path">${indexPath}</span></p>
-                            <p class="info">但是API服务正常运行在: <span class="path">/api</span></p>
-            
-            <h3>🔧 可能的解决方案:</h3>
-            <ul style="text-align: left; max-width: 500px; margin: 0 auto;">
-              <li>重新构建Docker镜像确保前端文件被正确包含</li>
-              <li>检查前端构建过程是否成功</li>
-              <li>使用最新的官方镜像: <code>ghcr.io/yeagoo/dommate:latest</code></li>
-            </ul>
-            
-            <p style="margin-top: 20px;">
-              <a href="/api/auth/info" style="color: #007bff;">测试API接口 →</a>
-            </p>
-          </div>
-        </body>
-      </html>
-    `);
-  }
-});
-
-app.listen(PORT, async () => {
-  await db.init();
-  await initializeDynamicTasks(); // 初始化动态定时任务
-  console.log(`服务器运行在端口 ${PORT}`);
-      console.log(`API 地址: http://0.0.0.0:${PORT}/api`);
-    console.log(`前端页面: http://0.0.0.0:${PORT}`);
-  
-  // 检查前端文件是否存在
-  const indexPath = path.join(process.cwd(), 'dist/index.html');
-  if (fsSync.existsSync(indexPath)) {
-    console.log('✅ 前端文件已加载');
-  } else {
-    console.log('⚠️  前端文件未找到，仅提供API服务');
-  }
-}); 
-
-// 获取域名统计
-app.get('/api/domains/stats', async (req, res) => {
-  try {
-    const stats = await db.getDomainStats();
-    res.json(stats);
-  } catch (error) {
-    console.error('获取统计数据失败:', error);
-    res.status(500).json({ error: '获取统计数据失败: ' + error.message });
-  }
-});
 
 // 批量标记重要
 app.post('/api/domains/batch-important', async (req, res) => {

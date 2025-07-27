@@ -1,115 +1,155 @@
-# ================================
-# DomMate - Production Docker Compose
-# ================================
-
 version: '3.8'
 
 services:
-  # Main DomMate application
+  # DomMate Application
   dommate:
-    image: ghcr.io/yeagoo/dommate:latest
-    container_name: dommate
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: dommate:latest
+    container_name: dommate-app
     restart: unless-stopped
+    
+    # Environment variables
+    environment:
+      - NODE_ENV=production
+      - SERVER_HOST=0.0.0.0
+      - SERVER_PORT=3001
+      - DATABASE_PATH=/app/data/domains.db
+      - LOG_FILE=/app/logs/dommate.log
+      - BACKUP_DIR=/app/backups
+      - EXPORT_TEMP_DIR=/app/temp/exports
     
     # Port mapping
     ports:
       - "3001:3001"
     
-    # Environment variables
-    environment:
-      - NODE_ENV=production
-      - PORT=3001
-      - TZ=Asia/Shanghai
-      - DATABASE_PATH=/app/data/domains.db
-      - EXPORT_DIR=/app/exports
-      - LOG_FILE=/app/logs/dommate.log
-      - DATABASE_BACKUP_DIR=/app/data/backups
-      - PUID=1000
-      - PGID=1000
-    
-    # Environment file (create from env.example)
-    env_file:
-      - .env
-    
     # Volume mounts for persistent data
     volumes:
-      # 数据持久化卷
-      - dommate-data:/app/data      # 数据库和配置文件
-      - dommate-logs:/app/logs      # 应用日志
-      - dommate-exports:/app/exports # 导出文件
+      - dommate-data:/app/data
+      - dommate-logs:/app/logs
+      - dommate-backups:/app/backups
+      - dommate-temp:/app/temp
+      # Mount environment file if exists
+      - ./env.production:/app/.env
     
     # Health check
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3001/api/auth/info"]
+      test: ["CMD", "node", "-e", "const http = require('http'); const options = { host: 'localhost', port: 3001, path: '/health', timeout: 2000 }; const request = http.request(options, (res) => { if (res.statusCode == 200) process.exit(0); else process.exit(1); }); request.on('error', () => process.exit(1)); request.end();"]
       interval: 30s
-      timeout: 15s
-      retries: 5
+      timeout: 10s
+      retries: 3
       start_period: 40s
-    
-    # Security options
-    security_opt:
-      - no-new-privileges:true
     
     # Resource limits
     deploy:
       resources:
         limits:
-          memory: 512M
-          cpus: '1.0'
+          cpus: '2.0'
+          memory: 1G
         reservations:
-          memory: 256M
           cpus: '0.5'
+          memory: 256M
+    
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     
     # Networks
     networks:
-      - dommate_network
+      - dommate-network
 
-  # Nginx reverse proxy (optional)
+  # Nginx Reverse Proxy (Optional)
   nginx:
     image: nginx:alpine
-    container_name: dommate_nginx
+    container_name: dommate-nginx
     restart: unless-stopped
     
-    # Port mapping for HTTP/HTTPS
     ports:
       - "80:80"
       - "443:443"
     
-    # Volume mounts for Nginx configuration
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./nginx/conf.d:/etc/nginx/conf.d:ro
-      - nginx_cache:/var/cache/nginx
-      - nginx_logs:/var/log/nginx
-      # SSL certificates (if using HTTPS)
-      # - ./ssl:/etc/nginx/ssl:ro
+      - ./ssl:/etc/nginx/ssl:ro
+      - nginx-cache:/var/cache/nginx
     
-    # Depends on main application
     depends_on:
-      dommate:
-        condition: service_healthy
+      - dommate
     
-    # Networks
     networks:
-      - dommate_network
+      - dommate-network
+    
+    # Only start if nginx config exists
+    profiles:
+      - nginx
 
-# 命名卷定义
+  # Database Backup Service (Optional)
+  backup:
+    image: dommate:latest
+    container_name: dommate-backup
+    restart: "no"
+    
+    environment:
+      - NODE_ENV=production
+      - DATABASE_PATH=/app/data/domains.db
+      - BACKUP_DIR=/app/backups
+    
+    volumes:
+      - dommate-data:/app/data:ro
+      - dommate-backups:/app/backups
+      - ./env.production:/app/.env:ro
+    
+    # Run backup script
+    command: ["sh", "-c", "node -e \"const db = require('./server/database'); db.backupDatabase().then(() => console.log('Backup completed')).catch(console.error);\""]
+    
+    networks:
+      - dommate-network
+    
+    profiles:
+      - backup
+
+# Named volumes for persistent data
 volumes:
   dommate-data:
     driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./docker-data/data
+  
   dommate-logs:
-    driver: local  
-  dommate-exports:
     driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./docker-data/logs
   
-  nginx_cache:
+  dommate-backups:
     driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./docker-data/backups
   
-  nginx_logs:
+  dommate-temp:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./docker-data/temp
+  
+  nginx-cache:
     driver: local
 
 # Custom network
 networks:
-  dommate_network:
+  dommate-network:
     driver: bridge
-    name: dommate_network 
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16 

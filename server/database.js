@@ -6,8 +6,8 @@ import { dirname, join } from 'path';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// 数据库文件路径 - 使用环境变量或默认路径
-const DB_PATH = process.env.DATABASE_PATH || join(__dirname, '..', 'data', 'domains.db');
+// 数据库文件路径
+const DB_PATH = join(__dirname, '..', 'domains.db');
 
 class DomainDatabase {
   constructor() {
@@ -16,21 +16,7 @@ class DomainDatabase {
 
   // 初始化数据库连接
   async init() {
-    return new Promise(async (resolve, reject) => {
-      // 确保数据库目录存在
-      const fs = await import('fs');
-      const path = await import('path');
-      const dbDir = path.dirname(DB_PATH);
-      
-      try {
-        await fs.promises.mkdir(dbDir, { recursive: true });
-        console.log(`✅ 数据库目录已确保存在: ${dbDir}`);
-      } catch (error) {
-        console.error('创建数据库目录失败:', error);
-      }
-      
-      console.log(`📁 数据库文件路径: ${DB_PATH}`);
-      
+    return new Promise((resolve, reject) => {
       this.db = new sqlite3.Database(DB_PATH, (err) => {
         if (err) {
           console.error('数据库连接失败:', err.message);
