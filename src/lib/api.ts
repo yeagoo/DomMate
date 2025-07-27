@@ -30,7 +30,7 @@ class ApiService {
             localStorage.removeItem('sessionId');
             // 刷新页面到登录界面
             window.location.reload();
-            return;
+            throw new Error('Authentication required');
           }
         }
         throw new Error(`HTTP error! status: ${response.status}`);
