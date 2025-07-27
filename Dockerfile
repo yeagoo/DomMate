@@ -19,8 +19,12 @@ COPY . .
 RUN (npm run build:check && npm run build) || \
     (echo "Type checking failed, building without checks..." && npm run build) || \
     (echo "Build failed, attempting rollup fix..." && \
-     rm -rf node_modules/@rollup/ && \
-     npm install @rollup/rollup-linux-x64-gnu --optional --legacy-peer-deps && \
+     rm -rf node_modules/@rollup/ node_modules/rollup && \
+     npm install @rollup/rollup-linux-x64-musl --optional --legacy-peer-deps && \
+     npm run build) || \
+    (echo "Musl rollup failed, trying alternative approach..." && \
+     rm -rf node_modules package-lock.json && \
+     npm install --legacy-peer-deps && \
      npm run build)
 
 # Stage 2: Production image

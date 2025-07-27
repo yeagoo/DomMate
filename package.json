@@ -18,6 +18,7 @@
     "dev": "astro dev",
     "start": "astro dev",
     "build": "astro build",
+    "build:check": "astro check",
     "build:strict": "astro check && astro build",
     "preview": "astro preview",
     "astro": "astro",
