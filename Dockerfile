@@ -16,12 +16,12 @@ RUN npm cache clean --force && \
 COPY . .
 
 # Build the frontend with fallback
-RUN (astro check && astro build) || \
-    (echo "Type checking failed, building without checks..." && astro build) || \
+RUN (npm run build:check && npm run build) || \
+    (echo "Type checking failed, building without checks..." && npm run build) || \
     (echo "Build failed, attempting rollup fix..." && \
      rm -rf node_modules/@rollup/ && \
      npm install @rollup/rollup-linux-x64-gnu --optional --legacy-peer-deps && \
-     astro build)
+     npm run build)
 
 # Stage 2: Production image
 FROM node:18-alpine AS production

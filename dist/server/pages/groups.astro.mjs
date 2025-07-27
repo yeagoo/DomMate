@@ -1,10 +1,10 @@
 import { c as createComponent, d as renderComponent, r as renderTemplate } from '../chunks/astro/server_B-ZIt8ph.mjs';
 import 'kleur/colors';
-import { $ as $$Layout } from '../chunks/Layout_CAXozFhl.mjs';
+import { $ as $$Layout } from '../chunks/Layout_BH0Ldx9t.mjs';
 import { jsx } from 'react/jsx-runtime';
 import 'react';
 import { A as AuthWrapper } from '../chunks/AuthWrapper_DS0O-dGF.mjs';
-import { G as GroupManagement } from '../chunks/GroupManagement_BnnWVlUF.mjs';
+import { G as GroupManagement } from '../chunks/GroupManagement_jKYxQgzS.mjs';
 export { renderers } from '../renderers.mjs';
 
 const GroupManagementWithAuth = ({ language = "zh" }) => {

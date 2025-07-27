@@ -66,13 +66,21 @@ jobs:
       - name: Build frontend (attempt 1)
         id: build-attempt-1
         continue-on-error: true
-        run: astro check && astro build
+        run: npm run build:check && npm run build
 
       - name: Build frontend (attempt 2 - skip type checking)
         if: steps.build-attempt-1.outcome == 'failure'
         run: |
           echo "Type checking failed, building without strict checks..."
-          astro build
+          npm run build
+
+      - name: Build frontend (attempt 3 - rollup fix)
+        if: steps.build-attempt-1.outcome == 'failure'
+        run: |
+          echo "Build failed, attempting rollup fix..."
+          rm -rf node_modules/@rollup/
+          npm install @rollup/rollup-linux-x64-gnu --optional --legacy-peer-deps
+          npm run build
 
   # Build Docker image
   build:

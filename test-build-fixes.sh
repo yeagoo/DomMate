@@ -70,7 +70,7 @@ else
     rm -rf node_modules/@rollup/
     npm install @rollup/rollup-linux-x64-gnu --optional --legacy-peer-deps
     
-    if astro build >/dev/null 2>&1; then
+    if npm run build >/dev/null 2>&1; then
         success "Build successful with fallback approach"
         BUILD_SUCCESS=true
     else
@@ -116,7 +116,7 @@ echo ""
 echo "🔍 Checking TypeScript issues..."
 
 # Run type check without failing the script
-if astro check 2>/dev/null; then
+if npm run build:check 2>/dev/null; then
     success "No TypeScript errors"
 else
     warning "TypeScript warnings/errors detected (build will still succeed)"

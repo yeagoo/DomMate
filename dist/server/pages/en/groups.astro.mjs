@@ -1,7 +1,7 @@
 import { c as createComponent, d as renderComponent, r as renderTemplate, m as maybeRenderHead } from '../../chunks/astro/server_B-ZIt8ph.mjs';
 import 'kleur/colors';
-import { $ as $$LayoutEn } from '../../chunks/LayoutEn_PaG63UjK.mjs';
-import { G as GroupManagement } from '../../chunks/GroupManagement_BnnWVlUF.mjs';
+import { $ as $$LayoutEn } from '../../chunks/LayoutEn_PX-ZJiKS.mjs';
+import { G as GroupManagement } from '../../chunks/GroupManagement_jKYxQgzS.mjs';
 export { renderers } from '../../renderers.mjs';
 
 const $$Groups = createComponent(($$result, $$props, $$slots) => {
