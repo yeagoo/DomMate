@@ -25,6 +25,10 @@
 - ❌ **问题**: `"/env.example": not found`
 - ✅ **解决**: 修复 `.dockerignore` 规则冲突
 
+### **第五阶段**: Alpine Linux Rollup 兼容性
+- ❌ **问题**: `Missing script: "build:check"` + `@rollup/rollup-linux-x64-musl not found`
+- ✅ **解决**: 添加脚本 + 使用正确的 musl 版本 rollup 模块
+
 ---
 
 ## 📋 完整修复清单
@@ -58,7 +62,7 @@
 
 ## 🎯 技术改进亮点
 
-### **🔄 渐进式构建策略**
+### **🔄 四层渐进式构建策略**
 ```yaml
 # Layer 1: 完整构建 (理想情况)
 npm run build:check && npm run build
@@ -66,8 +70,13 @@ npm run build:check && npm run build
 # Layer 2: 跳过类型检查 (类型错误时)  
 npm run build
 
-# Layer 3: Rollup 修复 (模块问题时)
-rm -rf node_modules/@rollup/ && npm install @rollup/rollup-linux-x64-gnu --optional --legacy-peer-deps && npm run build
+# Layer 3: 平台特定 Rollup 修复 (模块问题时)
+# Alpine/Docker: @rollup/rollup-linux-x64-musl
+# Ubuntu/GitHub: @rollup/rollup-linux-x64-gnu
+rm -rf node_modules/@rollup/ node_modules/rollup && npm install @rollup/rollup-linux-x64-musl --optional --legacy-peer-deps && npm run build
+
+# Layer 4: 完全重装 (终极方案)
+rm -rf node_modules package-lock.json && npm install --legacy-peer-deps && npm run build
 ```
 
 ### **🛡️ 企业级错误处理**
@@ -93,6 +102,7 @@ rm -rf node_modules/@rollup/ && npm install @rollup/rollup-linux-x64-gnu --optio
 | **Astro 命令** | ❌ Command not found | ✅ 标准化 npm scripts |
 | **Actions 版本** | ❌ 弃用版本自动失败 | ✅ 最新稳定版本 |
 | **Docker 文件** | ❌ 文件未找到 | ✅ 正确的忽略规则 |
+| **Alpine Linux** | ❌ musl/glibc 不兼容 | ✅ 四层备用机制 |
 | **构建成功率** | ❌ < 50% | ✅ 99%+ |
 | **错误恢复** | ❌ 单点失败 | ✅ 智能自动恢复 |
 
