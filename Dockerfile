@@ -65,6 +65,10 @@ COPY --chown=dommate:nodejs ./public ./public
 COPY --chown=dommate:nodejs ./domain-config.js ./
 COPY --chown=dommate:nodejs ./env.example ./.env.example
 
+# Copy startup script
+COPY --chown=dommate:nodejs ./docker-entrypoint.sh ./
+RUN chmod +x /app/docker-entrypoint.sh
+
 # Copy shell scripts
 COPY --chown=dommate:nodejs ./password-admin-tool.sh ./
 COPY --chown=dommate:nodejs ./test-force-password-change.sh ./
@@ -75,6 +79,10 @@ RUN chmod +x /app/password-admin-tool.sh /app/test-force-password-change.sh
 # Set environment variables for data persistence
 ENV DATABASE_PATH=/app/data/domains.db
 ENV BACKUP_DIR=/app/data/backups
+
+# Ensure correct permissions for data directories (critical for Docker volumes)
+RUN chown -R dommate:nodejs /app/data /app/logs /app/backups && \
+    chmod -R 755 /app/data /app/logs /app/backups
 
 # Switch to non-root user
 USER dommate
@@ -92,5 +100,6 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
 # Expose ports
 EXPOSE 3001
 
-# Start the application
+# Start the application using entrypoint script
+ENTRYPOINT ["/app/docker-entrypoint.sh"]
 CMD ["node", "server/index.js"] 

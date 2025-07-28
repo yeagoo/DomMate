@@ -20,23 +20,50 @@ class DomainDatabase {
     return new Promise((resolve, reject) => {
       // 确保数据目录存在
       const dataDir = dirname(DB_PATH);
+      console.log(`🔍 数据库路径: ${DB_PATH}`);
+      console.log(`🔍 数据目录: ${dataDir}`);
+      
       if (!existsSync(dataDir)) {
         try {
           mkdirSync(dataDir, { recursive: true });
           console.log(`✅ 数据目录创建成功: ${dataDir}`);
         } catch (err) {
           console.error(`❌ 数据目录创建失败: ${err.message}`);
+          console.error(`📋 错误详情: ${err.stack}`);
           reject(err);
           return;
         }
+      } else {
+        console.log(`✅ 数据目录已存在: ${dataDir}`);
+      }
+
+      // 检查目录权限
+      try {
+        // 尝试写入测试文件来检查权限
+        const testFile = join(dataDir, '.write-test');
+        require('fs').writeFileSync(testFile, 'test');
+        require('fs').unlinkSync(testFile);
+        console.log(`✅ 数据目录权限正常: ${dataDir}`);
+      } catch (err) {
+        console.error(`❌ 数据目录权限不足: ${err.message}`);
+        console.error(`🔧 请检查目录权限: ls -la ${dirname(dataDir)}`);
+        reject(new Error(`数据目录权限不足: ${dataDir} - ${err.message}`));
+        return;
       }
 
       this.db = new sqlite3.Database(DB_PATH, (err) => {
         if (err) {
-          console.error('数据库连接失败:', err.message);
+          console.error('❌ 数据库连接失败:', err.message);
+          console.error('📋 错误代码:', err.code || 'UNKNOWN');
+          console.error('📋 错误编号:', err.errno || 'UNKNOWN');
+          console.error('🔧 建议解决方案:');
+          console.error('   1. 检查数据目录权限: ls -la /app/data');
+          console.error('   2. 检查磁盘空间: df -h');
+          console.error('   3. 检查用户权限: whoami && id');
           reject(err);
         } else {
           console.log('✅ SQLite数据库连接成功');
+          console.log(`📍 数据库文件位置: ${DB_PATH}`);
           
           this.db.serialize(async () => {
             try {
