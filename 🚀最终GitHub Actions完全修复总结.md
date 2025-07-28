@@ -1,8 +1,8 @@
-# 🚀 DomMate 九阶段完全修复总结
+# 🚀 DomMate 十阶段完全修复总结
 
 ## ✅ 全部问题已解决！
 
-经过系统性的诊断和修复，DomMate 项目从 GitHub Actions CI/CD 构建到完整部署的**九个阶段**问题现在全部解决，实现了完整的端到端解决方案。
+经过系统性的诊断和修复，DomMate 项目从 GitHub Actions CI/CD 构建到完整部署的**十个阶段**问题现在全部解决，实现了完整的端到端解决方案。
 
 ---
 
@@ -44,6 +44,10 @@
 ### **第九阶段**: API 动态 URL 配置
 - ❌ **问题**: API连接失败 - `net::ERR_CONNECTION_REFUSED`
 - ✅ **解决**: 动态URL配置 + Docker标签增强
+
+### **第十阶段**: 邮件模块 API 配置
+- ❌ **问题**: 邮件模块独立API仍使用硬编码URL
+- ✅ **解决**: 修复`emailApi`客户端动态URL配置
 
 ---
 
@@ -206,6 +210,7 @@ git push origin main
 - 🔧 `🔧Express静态文件服务修复.md` - 前端文件服务修复
 - 🔧 `🔧Astro静态输出模式修复.md` - 前端构建模式修复  
 - 🔧 `🔧API动态URL配置修复.md` - API连接配置修复
+- 🔧 `🔧邮件模块API配置修复.md` - 邮件模块专用API修复
 - 🚀 `🚀最终GitHub Actions完全修复总结.md` - 本文档
 
 ### **运维工具**
