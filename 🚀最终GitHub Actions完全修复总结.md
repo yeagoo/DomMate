@@ -37,6 +37,10 @@
 - ❌ **问题**: 容器后端正常但前端无法访问 - `Cannot GET /`
 - ✅ **解决**: 添加 Express 静态文件服务和 SPA 路由支持
 
+### **第八阶段**: Astro 静态输出模式
+- ❌ **问题**: 前端构建产物缺失 - `Error: ENOENT...index.html`
+- ✅ **解决**: 修改 Astro 配置从 SSR 模式到静态模式
+
 ---
 
 ## 📋 完整修复清单
@@ -196,6 +200,7 @@ git push origin main
 - 🔧 `🔧Alpine Linux Rollup 修复.md` - 兼容性问题修复
 - 🔧 `🔧GitHub Container Registry镜像名称修复.md` - 镜像命名规范修复
 - 🔧 `🔧Express静态文件服务修复.md` - 前端文件服务修复
+- 🔧 `🔧Astro静态输出模式修复.md` - 前端构建模式修复
 - 🚀 `🚀最终GitHub Actions完全修复总结.md` - 本文档
 
 ### **运维工具**
