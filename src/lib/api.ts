@@ -1,6 +1,9 @@
 import type { Domain, ImportResult } from '@/types/domain';
 
-const API_BASE_URL = 'http://localhost:3001/api';
+// 使用相对路径，兼容开发和生产环境
+const API_BASE_URL = typeof window !== 'undefined' 
+  ? (window.location.origin + '/api')  // 浏览器环境：使用当前域名
+  : '/api';  // 服务器端渲染：使用相对路径
 
 class ApiService {
   private getSessionId(): string | null {

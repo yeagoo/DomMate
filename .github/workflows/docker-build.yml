@@ -124,6 +124,11 @@ jobs:
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}
             type=raw,value=latest,enable={{is_default_branch}}
+            # 添加更多标签
+            type=raw,value=stable,enable={{is_default_branch}}
+            type=raw,value={{date 'YYYY-MM-DD'}},enable={{is_default_branch}}
+            type=sha,prefix={{branch}}-
+            type=raw,value={{branch}}-{{sha}},enable=true
           labels: |
             org.opencontainers.image.title=DomMate
             org.opencontainers.image.description=Professional Domain Expiration Monitoring Platform
