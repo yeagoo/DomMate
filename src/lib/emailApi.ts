@@ -23,14 +23,21 @@ const API_BASE = typeof window !== 'undefined'
   : '/api/email';  // 服务器端渲染：使用相对路径
 
 class EmailApiClient {
+  private getSessionId(): string | null {
+    return localStorage.getItem('sessionId');
+  }
+
   private async request<T>(
     endpoint: string,
     options: RequestInit = {}
   ): Promise<T> {
     const url = `${API_BASE}${endpoint}`;
+    const sessionId = this.getSessionId();
+    
     const config: RequestInit = {
       headers: {
         'Content-Type': 'application/json',
+        ...(sessionId && { 'X-Session-Id': sessionId }),
         ...options.headers,
       },
       ...options,
@@ -39,6 +46,17 @@ class EmailApiClient {
     const response = await fetch(url, config);
     
     if (!response.ok) {
+      // 如果是401认证失败，触发重新登录
+      if (response.status === 401) {
+        const errorData = await response.json().catch(() => ({}));
+        if (errorData.requiresAuth) {
+          // 清理本地会话
+          localStorage.removeItem('sessionId');
+          // 刷新页面到登录界面
+          window.location.reload();
+          throw new Error('Authentication required');
+        }
+      }
       const errorData = await response.json().catch(() => ({}));
       throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
     }
