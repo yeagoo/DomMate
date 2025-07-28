@@ -11,10 +11,7 @@ export default defineConfig({
       applyBaseStyles: false,
     })
   ],
-  output: 'server',
-  adapter: node({
-    mode: 'standalone'
-  }),
+  output: 'static',
   vite: {
     server: {
       proxy: {

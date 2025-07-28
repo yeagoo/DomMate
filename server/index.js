@@ -86,7 +86,7 @@ app.use(cors());
 app.use(express.json());
 
 // 服务静态文件 (前端构建产物)
-app.use(express.static(path.join(process.cwd(), 'dist/client')));
+app.use(express.static(path.join(process.cwd(), 'dist')));
 
 // 设置健康检查端点
 setupHealthCheck(app, db);
@@ -2128,7 +2128,7 @@ app.get('*', (req, res) => {
   }
   
   // 为前端路由返回index.html
-  res.sendFile(path.join(process.cwd(), 'dist/client/index.html'));
+  res.sendFile(path.join(process.cwd(), 'dist/index.html'));
 });
 
 app.listen(PORT, async () => {
