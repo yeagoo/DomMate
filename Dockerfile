@@ -72,6 +72,10 @@ COPY --chown=dommate:nodejs ./test-force-password-change.sh ./
 # Make shell scripts executable
 RUN chmod +x /app/password-admin-tool.sh /app/test-force-password-change.sh
 
+# Set environment variables for data persistence
+ENV DATABASE_PATH=/app/data/domains.db
+ENV BACKUP_DIR=/app/data/backups
+
 # Switch to non-root user
 USER dommate
 

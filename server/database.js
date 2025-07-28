@@ -2,12 +2,13 @@ import sqlite3 from 'sqlite3';
 import { promisify } from 'util';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import { existsSync, mkdirSync } from 'fs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// 数据库文件路径
-const DB_PATH = join(__dirname, '..', 'domains.db');
+// 数据库文件路径 - 存储在 /app/data 目录以实现数据持久化
+const DB_PATH = process.env.DATABASE_PATH || join(__dirname, '..', 'data', 'domains.db');
 
 class DomainDatabase {
   constructor() {
@@ -17,6 +18,19 @@ class DomainDatabase {
   // 初始化数据库连接
   async init() {
     return new Promise((resolve, reject) => {
+      // 确保数据目录存在
+      const dataDir = dirname(DB_PATH);
+      if (!existsSync(dataDir)) {
+        try {
+          mkdirSync(dataDir, { recursive: true });
+          console.log(`✅ 数据目录创建成功: ${dataDir}`);
+        } catch (err) {
+          console.error(`❌ 数据目录创建失败: ${err.message}`);
+          reject(err);
+          return;
+        }
+      }
+
       this.db = new sqlite3.Database(DB_PATH, (err) => {
         if (err) {
           console.error('数据库连接失败:', err.message);
