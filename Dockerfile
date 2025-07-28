@@ -1,21 +1,12 @@
-# Multi-stage Dockerfile for DomMate
-# Stage 1: Build the frontend
+# Stage 1: Frontend builder
 FROM node:18-alpine AS frontend-builder
 
-# Set working directory
 WORKDIR /app
-
-# Copy package files
 COPY package*.json ./
-
-# Install dependencies with rollup fix
 RUN npm cache clean --force && \
     npm install --legacy-peer-deps
 
-# Copy source code
 COPY . .
-
-# Build the frontend with fallback
 RUN (npm run build:check && npm run build) || \
     (echo "Type checking failed, building without checks..." && npm run build) || \
     (echo "Build failed, attempting rollup fix..." && \
@@ -49,12 +40,10 @@ RUN mkdir -p /app/data /app/logs /app/backups /app/temp/exports && \
 
 # Copy package files
 COPY package*.json ./
-
-# Install only production dependencies
 RUN npm ci --only=production && \
     npm cache clean --force
 
-# Copy built frontend from stage 1
+# Copy built frontend
 COPY --from=frontend-builder --chown=dommate:nodejs /app/dist ./dist
 
 # Copy server files
@@ -64,10 +53,6 @@ COPY --chown=dommate:nodejs ./server ./server
 COPY --chown=dommate:nodejs ./public ./public
 COPY --chown=dommate:nodejs ./domain-config.js ./
 COPY --chown=dommate:nodejs ./env.example ./.env.example
-
-# Copy startup script
-COPY --chown=dommate:nodejs ./docker-entrypoint.sh ./
-RUN chmod +x /app/docker-entrypoint.sh
 
 # Copy shell scripts
 COPY --chown=dommate:nodejs ./password-admin-tool.sh ./
@@ -83,6 +68,51 @@ ENV BACKUP_DIR=/app/data/backups
 # Ensure correct permissions for data directories (critical for Docker volumes)
 RUN chown -R dommate:nodejs /app/data /app/logs /app/backups && \
     chmod -R 755 /app/data /app/logs /app/backups
+
+# Create startup script directly in the container
+RUN cat > /app/startup.sh << 'SCRIPT_EOF'
+#!/bin/sh
+set -e
+
+echo "🚀 DomMate 容器启动中..."
+
+# 检查并创建必要的数据目录
+echo "🔍 检查数据目录..."
+if [ ! -d "/app/data" ]; then
+    echo "📁 创建数据目录: /app/data"
+    mkdir -p /app/data
+fi
+
+if [ ! -d "/app/data/backups" ]; then
+    echo "📁 创建备份目录: /app/data/backups"
+    mkdir -p /app/data/backups
+fi
+
+# 检查目录权限
+echo "🔐 检查目录权限..."
+if [ ! -w "/app/data" ]; then
+    echo "❌ 警告: /app/data 目录不可写"
+    echo "🔧 尝试修复权限..."
+    ls -la /app/data || echo "目录不存在或无权限访问"
+fi
+
+# 显示目录状态
+echo "📊 数据目录状态:"
+ls -la /app/ | grep -E "(data|logs|backups)" || echo "目录创建中..."
+
+# 检查环境变量
+echo "⚙️ 环境变量检查:"
+echo "  DATABASE_PATH: ${DATABASE_PATH:-未设置}"
+echo "  BACKUP_DIR: ${BACKUP_DIR:-未设置}"
+
+# 启动应用
+echo "🎯 启动 DomMate 应用..."
+exec "$@"
+SCRIPT_EOF
+
+# Set permissions for startup script
+RUN chmod +x /app/startup.sh && \
+    chown dommate:nodejs /app/startup.sh
 
 # Switch to non-root user
 USER dommate
@@ -100,6 +130,6 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
 # Expose ports
 EXPOSE 3001
 
-# Start the application using entrypoint script
-ENTRYPOINT ["/app/docker-entrypoint.sh"]
+# Start the application using internal startup script
+ENTRYPOINT ["/app/startup.sh"]
 CMD ["node", "server/index.js"] 
