@@ -33,6 +33,10 @@
 - ❌ **问题**: SBOM action 失败 - `ghcr.io/yeagoo/DomMate:latest` 镜像名称大小写问题
 - ✅ **解决**: 修复镜像名称为小写 (`github.repository_owner/dommate`)
 
+### **第七阶段**: Express 静态文件服务
+- ❌ **问题**: 容器后端正常但前端无法访问 - `Cannot GET /`
+- ✅ **解决**: 添加 Express 静态文件服务和 SPA 路由支持
+
 ---
 
 ## 📋 完整修复清单
@@ -191,6 +195,7 @@ git push origin main
 - 🔧 `🔧Docker构建env.example修复.md` - 文件规则修复
 - 🔧 `🔧Alpine Linux Rollup 修复.md` - 兼容性问题修复
 - 🔧 `🔧GitHub Container Registry镜像名称修复.md` - 镜像命名规范修复
+- 🔧 `🔧Express静态文件服务修复.md` - 前端文件服务修复
 - 🚀 `🚀最终GitHub Actions完全修复总结.md` - 本文档
 
 ### **运维工具**
