@@ -17,7 +17,10 @@ import type {
   EmailSendResult
 } from '@/types/email';
 
-const API_BASE = 'http://localhost:3001/api/email';
+// 使用动态API基础URL，兼容开发和生产环境
+const API_BASE = typeof window !== 'undefined' 
+  ? (window.location.origin + '/api/email')  // 浏览器环境：使用当前域名
+  : '/api/email';  // 服务器端渲染：使用相对路径
 
 class EmailApiClient {
   private async request<T>(
