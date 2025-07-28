@@ -20,7 +20,6 @@ echo "🔐 检查目录权限..."
 if [ ! -w "/app/data" ]; then
     echo "❌ 警告: /app/data 目录不可写"
     echo "🔧 尝试修复权限..."
-    # 这里不能直接chown，因为已经是dommate用户了
     ls -la /app/data || echo "目录不存在或无权限访问"
 fi
 
@@ -35,4 +34,4 @@ echo "  BACKUP_DIR: ${BACKUP_DIR:-未设置}"
 
 # 启动应用
 echo "🎯 启动 DomMate 应用..."
-exec "$@" 
+exec "$@"
