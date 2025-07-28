@@ -29,6 +29,10 @@
 - ❌ **问题**: `Missing script: "build:check"` + `@rollup/rollup-linux-x64-musl not found`
 - ✅ **解决**: 添加脚本 + 使用正确的 musl 版本 rollup 模块
 
+### **第六阶段**: GitHub Container Registry 镜像名称
+- ❌ **问题**: SBOM action 失败 - `ghcr.io/yeagoo/DomMate:latest` 镜像名称大小写问题
+- ✅ **解决**: 修复镜像名称为小写 (`github.repository_owner/dommate`)
+
 ---
 
 ## 📋 完整修复清单
@@ -185,6 +189,8 @@ git push origin main
 - 🔧 `🔧astro命令修复.md` - 命令问题修复  
 - 🔧 `🔧GitHub Actions版本修复.md` - 版本升级
 - 🔧 `🔧Docker构建env.example修复.md` - 文件规则修复
+- 🔧 `🔧Alpine Linux Rollup 修复.md` - 兼容性问题修复
+- 🔧 `🔧GitHub Container Registry镜像名称修复.md` - 镜像命名规范修复
 - 🚀 `🚀最终GitHub Actions完全修复总结.md` - 本文档
 
 ### **运维工具**
