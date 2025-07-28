@@ -23,6 +23,13 @@ on:
         default: 'true'
         type: boolean
 
+# 添加权限配置以支持GHCR写入
+permissions:
+  contents: read
+  packages: write
+  attestations: write
+  id-token: write
+
 # Environment variables
 env:
   REGISTRY: ghcr.io
