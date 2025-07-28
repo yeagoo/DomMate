@@ -117,6 +117,20 @@ jobs:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+          
+      - name: Verify GitHub Container Registry access
+        if: github.event_name != 'pull_request'
+        run: |
+          echo "🔐 验证GHCR访问权限..."
+          echo "Registry: ${{ env.REGISTRY }}"
+          echo "Image Name: ${{ env.IMAGE_NAME }}"
+          echo "Actor: ${{ github.actor }}"
+          echo "Repository: ${{ github.repository }}"
+          echo "Repository Owner: ${{ github.repository_owner }}"
+          
+          # 测试权限
+          echo "测试 GHCR 认证状态..."
+          docker buildx imagetools inspect ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest || echo "镜像不存在（首次推送正常）"
 
       - name: Extract metadata
         id: meta
