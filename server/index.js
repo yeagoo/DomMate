@@ -85,6 +85,9 @@ async function whoisWithRetry(domain, maxRetries = 3, timeout = 15000) {
 app.use(cors());
 app.use(express.json());
 
+// 服务静态文件 (前端构建产物)
+app.use(express.static(path.join(process.cwd(), 'dist/client')));
+
 // 设置健康检查端点
 setupHealthCheck(app, db);
 
@@ -2117,11 +2120,23 @@ cron.schedule('0 2 * * *', async () => {
   console.log('定时更新完成');
 });
 
+// Catch-all handler: 所有非API路由都返回index.html (SPA路由支持)
+app.get('*', (req, res) => {
+  // 跳过API路由
+  if (req.path.startsWith('/api/')) {
+    return res.status(404).json({ error: 'API endpoint not found' });
+  }
+  
+  // 为前端路由返回index.html
+  res.sendFile(path.join(process.cwd(), 'dist/client/index.html'));
+});
+
 app.listen(PORT, async () => {
   await db.init();
   await initializeDynamicTasks(); // 初始化动态定时任务
   console.log(`服务器运行在端口 ${PORT}`);
   console.log(`API 地址: http://localhost:${PORT}/api`);
+  console.log(`前端地址: http://localhost:${PORT}`);
 }); 
 
 // 获取域名统计
