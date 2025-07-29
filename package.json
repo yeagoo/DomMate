@@ -71,7 +71,6 @@
     "whois": "^2.13.8"
   },
   "devDependencies": {
-    "@rollup/rollup-linux-arm64-gnu": "^4.46.1",
     "@types/cors": "^2.8.17",
     "@types/multer": "^1.4.11",
     "@types/node": "^20.11.30",
