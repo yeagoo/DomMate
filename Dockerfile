@@ -63,39 +63,9 @@ RUN echo "🏗️ 开始容器内前端构建..." && \
     if npm run build; then \
         echo "✅ 前端构建成功"; \
     else \
-        echo "❌ 前端构建失败，创建fallback版本..."; \
+        echo "❌ 前端构建失败，创建fallback版本..." && \
         mkdir -p dist && \
-        cat > dist/index.html << 'FALLBACK_EOF'
-<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DomMate - 域名监控系统</title>
-    <style>
-        body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background: #f5f5f5; }
-        .container { max-width: 600px; margin: 0 auto; background: white; padding: 40px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-        .status { color: #28a745; font-size: 18px; margin: 20px 0; }
-        .loading { color: #ffc107; font-size: 16px; margin: 10px 0; }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>🚀 DomMate</h1>
-        <p class="status">✅ Docker容器启动成功</p>
-        <p class="loading">⚙️ 系统正在初始化中...</p>
-        <p>如果您看到此页面，说明容器已成功启动</p>
-        <p>请稍等片刻，或检查构建配置</p>
-    </div>
-    <script>
-        console.log('DomMate fallback build loaded - Container is running');
-        setTimeout(() => {
-            window.location.reload();
-        }, 5000);
-    </script>
-</body>
-</html>
-FALLBACK_EOF
+        echo '<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>DomMate - 域名监控系统</title><style>body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background: #f5f5f5; } .container { max-width: 600px; margin: 0 auto; background: white; padding: 40px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); } .status { color: #28a745; font-size: 18px; margin: 20px 0; } .loading { color: #ffc107; font-size: 16px; margin: 10px 0; }</style></head><body><div class="container"><h1>🚀 DomMate</h1><p class="status">✅ Docker容器启动成功</p><p class="loading">⚙️ 系统正在初始化中...</p><p>如果您看到此页面，说明容器已成功启动</p><p>请稍等片刻，或检查构建配置</p></div><script>console.log("DomMate fallback build loaded - Container is running"); setTimeout(() => { window.location.reload(); }, 5000);</script></body></html>' > dist/index.html && \
         echo "✅ Fallback构建完成"; \
     fi
 
