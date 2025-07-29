@@ -1,0 +1,153 @@
+# 🐳 DomMate CI/CD Dockerfile - Simplified Version
+# Ubuntu 24.04 + Node.js 22 with robust build strategy
+
+FROM ubuntu:24.04
+
+# 设置环境变量
+ENV LC_ALL=C.UTF-8
+ENV LANG=C.UTF-8
+ENV NODE_ENV=production
+ENV TZ=Asia/Shanghai
+
+# 设置时区
+RUN ln -snf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && \
+    echo Asia/Shanghai > /etc/timezone
+
+# 安装系统依赖
+RUN apt-get clean && \
+    rm -rf /var/lib/apt/lists/* && \
+    apt-get update --fix-missing && \
+    apt-get install -y --no-install-recommends \
+        curl \
+        wget \
+        ca-certificates \
+        gnupg \
+        lsb-release \
+        sqlite3 \
+        build-essential \
+        python3 \
+        locales \
+        locales-all \
+        && rm -rf /var/lib/apt/lists/*
+
+# 设置locale
+RUN locale-gen en_US.UTF-8 zh_CN.UTF-8 && \
+    update-locale LANG=en_US.UTF-8
+
+# 安装Node.js 22.17.1
+RUN ARCH="$(dpkg --print-architecture)" && \
+    case "$ARCH" in \
+        amd64) NODE_ARCH="x64" ;; \
+        arm64) NODE_ARCH="arm64" ;; \
+        *) echo "Unsupported architecture: $ARCH" && exit 1 ;; \
+    esac && \
+    NODE_VERSION="22.17.1" && \
+    curl -fsSLO "https://nodejs.org/dist/v$NODE_VERSION/node-v$NODE_VERSION-linux-$NODE_ARCH.tar.xz" && \
+    tar -xJf "node-v$NODE_VERSION-linux-$NODE_ARCH.tar.xz" -C /usr/local --strip-components=1 && \
+    rm "node-v$NODE_VERSION-linux-$NODE_ARCH.tar.xz" && \
+    ln -s /usr/local/bin/node /usr/bin/node && \
+    ln -s /usr/local/bin/npm /usr/bin/npm
+
+# 验证安装
+RUN node --version && npm --version
+
+# 创建用户
+RUN groupadd -g 1001 dommate && \
+    useradd -r -u 1001 -g dommate dommate
+
+# 设置工作目录
+WORKDIR /app
+
+# 创建目录
+RUN mkdir -p /app/data /app/logs /app/backups /app/temp/exports && \
+    chown -R dommate:dommate /app && \
+    chmod -R 755 /app
+
+# 复制package文件
+COPY --chown=dommate:dommate package*.json ./
+
+# 配置npm
+RUN npm config set registry https://registry.npmjs.org/ && \
+    npm config set fetch-retries 5 && \
+    npm config set fetch-retry-factor 10 && \
+    npm config set fetch-retry-mintimeout 10000 && \
+    npm config set fetch-retry-maxtimeout 60000
+
+# 清理缓存
+RUN npm cache clean --force
+
+# 安装所有依赖
+RUN echo "🔧 Installing all dependencies..." && \
+    npm install --legacy-peer-deps --no-audit --no-fund
+
+# 复制源代码
+COPY --chown=dommate:dommate . .
+
+# 构建前端 - 第一次尝试
+RUN echo "🏗️ Attempt 1: Standard frontend build..." && \
+    npm run build && echo "✅ Standard build succeeded" || echo "❌ Standard build failed"
+
+# 构建前端 - 第二次尝试 (如果第一次失败)
+RUN if [ ! -d "dist" ]; then \
+        echo "🔧 Attempt 2: Rollup fix..." && \
+        rm -rf node_modules/@rollup/ node_modules/rollup && \
+        npm install @rollup/rollup-linux-x64-gnu --optional --legacy-peer-deps && \
+        npm run build && echo "✅ Rollup fix succeeded" || echo "❌ Rollup fix failed"; \
+    fi
+
+# 构建前端 - 第三次尝试 (如果前两次都失败)
+RUN if [ ! -d "dist" ]; then \
+        echo "🔄 Attempt 3: Complete reinstall..." && \
+        rm -rf node_modules package-lock.json && \
+        npm cache clean --force && \
+        npm install --legacy-peer-deps --no-audit --no-fund && \
+        npm install @rollup/rollup-linux-x64-gnu --save-optional --legacy-peer-deps && \
+        npm run build && echo "✅ Full reinstall succeeded" || echo "❌ Full reinstall failed"; \
+    fi
+
+# 构建前端 - 最后尝试 (简化配置)
+RUN if [ ! -d "dist" ]; then \
+        echo "🔧 Attempt 4: Simplified config..." && \
+        cp astro.config.mjs astro.config.mjs.backup && \
+        echo 'import { defineConfig } from "astro/config"; import react from "@astrojs/react"; export default defineConfig({ integrations: [react()], output: "static", build: { assets: "assets" } });' > astro.config.mjs && \
+        npm run build && \
+        mv astro.config.mjs.backup astro.config.mjs && \
+        echo "✅ Simplified config succeeded" || \
+        (echo "💥 All build attempts failed" && exit 1); \
+    fi
+
+# 验证构建结果
+RUN if [ -d "dist" ]; then \
+        echo "✅ Build verification passed" && \
+        ls -la dist/ && \
+        echo "📊 Files: HTML=$(find dist -name "*.html" | wc -l) JS=$(find dist -name "*.js" | wc -l) CSS=$(find dist -name "*.css" | wc -l)"; \
+    else \
+        echo "❌ Build verification failed - no dist directory" && \
+        exit 1; \
+    fi
+
+# 清理开发依赖
+RUN npm prune --production && \
+    npm cache clean --force && \
+    rm -rf /tmp/* /var/tmp/* ~/.npm ~/.cache
+
+# 切换用户
+USER dommate
+
+# 暴露端口
+EXPOSE 3001
+
+# 健康检查
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:3001/health || exit 1
+
+# 启动脚本
+RUN echo '#!/bin/bash\nset -e\necho "🚀 DomMate CI/CD Container Starting..."\necho "- Node.js: $(node --version)"\necho "- Architecture: $(uname -m)"\nmkdir -p /app/data /app/logs /app/backups /app/temp/exports\necho "🎯 Starting DomMate server..."\nexec node server/index.js' > /app/entrypoint.sh
+
+# 设置权限
+USER root
+RUN chmod +x /app/entrypoint.sh && chown dommate:dommate /app/entrypoint.sh
+USER dommate
+
+# 入口
+ENTRYPOINT ["/app/entrypoint.sh"] 

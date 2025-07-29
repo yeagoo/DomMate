@@ -101,10 +101,8 @@ RUN echo "🏗️ Building frontend with enhanced error handling..." && \
     echo "- TailwindCSS: $([ -d "node_modules/tailwindcss" ] && echo "✅ Found" || echo "❌ Missing")" && \
     echo "- Rollup: $([ -d "node_modules/rollup" ] && echo "✅ Found" || echo "❌ Missing")" && \
     echo "" && \
-    # 第一次尝试：标准构建
     (echo "🔍 Attempt 1: Standard build" && \
      npm run build && echo "✅ Standard build succeeded") || \
-    # 第二次尝试：修复rollup依赖
     (echo "🔧 Attempt 2: Rollup dependency fix" && \
      echo "Cleaning rollup modules..." && \
      rm -rf node_modules/@rollup/ node_modules/rollup && \
@@ -113,7 +111,6 @@ RUN echo "🏗️ Building frontend with enhanced error handling..." && \
      echo "Verifying rollup installation..." && \
      ls -la node_modules/@rollup/ && \
      npm run build && echo "✅ Rollup fix build succeeded") || \
-    # 第三次尝试：完全重新安装所有依赖
     (echo "🔄 Attempt 3: Complete dependency reinstall" && \
      echo "Removing all node modules..." && \
      rm -rf node_modules package-lock.json && \
@@ -128,7 +125,6 @@ RUN echo "🏗️ Building frontend with enhanced error handling..." && \
      echo "- Rollup: $([ -d "node_modules/rollup" ] && echo "✅ Found" || echo "❌ Missing")" && \
      echo "- @rollup modules: $(ls node_modules/@rollup/ | head -5)" && \
      npm run build && echo "✅ Full reinstall build succeeded") || \
-    # 第四次尝试：简化Astro配置
     (echo "🔧 Attempt 4: Simplified Astro configuration" && \
      echo "Creating simplified astro config..." && \
      cp astro.config.mjs astro.config.mjs.backup && \
@@ -148,8 +144,7 @@ EOF
      npm run build && \
      echo "✅ Simplified config build succeeded" && \
      mv astro.config.mjs.backup astro.config.mjs) || \
-    # 最后尝试：详细诊断
-    (echo "�� All build attempts failed - Running diagnostics" && \
+    (echo "💥 All build attempts failed - Running diagnostics" && \
      echo "📋 Diagnostic Information:" && \
      echo "- Working directory: $(pwd)" && \
      echo "- Node modules exists: $([ -d "node_modules" ] && echo "✅ Yes" || echo "❌ No")" && \
