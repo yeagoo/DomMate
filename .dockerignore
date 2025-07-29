@@ -1,7 +1,16 @@
-# 用于预构建镜像的 .dockerignore
-# 注意：这个版本允许 node_modules 和 dist
+# ==========================================
+# DomMate Docker构建忽略文件
+# 标准策略A：容器内构建模式
+# ==========================================
 
-# Environment files
+# ========== 构建产物和依赖 ==========
+# 这些将在容器内重新生成
+node_modules/
+dist/
+.astro/
+.output/
+
+# ========== 环境文件 ==========
 .env*
 !.env.example
 env.local
@@ -9,126 +18,122 @@ env.production
 env.development
 env.test
 
-# Development files
+# ========== 开发工具和版本控制 ==========
 .git/
 .gitignore
 .github/
 .vscode/
 .idea/
 
-# Documentation
+# ========== 文档和说明 ==========
 *.md
 !README.md
 docs/
+LICENSE
 
-# Database files
-*.db
-*.sqlite
-*.sqlite3
-domains.db*
-backup_*.db
-
-# Logs
-logs/
-*.log
-
-# Runtime data
-pids/
-*.pid
-*.seed
-*.pid.lock
-
-# Coverage
+# ========== 测试和覆盖率 ==========
+test/
+tests/
+__tests__/
 coverage/
-*.lcov
 .nyc_output/
+*.test.js
+*.spec.js
 
-# Build outputs - 这里不排除dist和node_modules，因为我们需要它们
-.astro/
-.output/
-.vercel/
-.netlify/
-
-# Cache directories
+# ========== 缓存和临时文件 ==========
 .cache/
 .parcel-cache/
+.npm/
+.eslintcache
+.stylelintcache
 .rpt2_cache/
 .rts2_cache_cjs/
 .rts2_cache_es/
 .rts2_cache_umd/
-.npm/
-.eslintcache
-.stylelintcache
 
-# Docker files (avoid recursion)
+# ========== 运行时和日志 ==========
+logs/
+*.log
+pids/
+*.pid
+
+# ========== Docker相关 ==========
 Dockerfile*
+!Dockerfile
 docker-compose*.yml
 .dockerignore*
-
-# Docker data
-docker-data/
+!.dockerignore
 .docker/
+docker-data/
 
-# Temporary files
+# ========== 备份和临时 ==========
 temp/
 tmp/
 *.tmp
 *.temp
+*.backup
+*.bak
+*.old
 
-# OS files
+# ========== 操作系统文件 ==========
 .DS_Store
 .DS_Store?
 ._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
 Thumbs.db
 Desktop.ini
 $RECYCLE.BIN/
 
-# Editor files
+# ========== 编辑器临时文件 ==========
 *.swp
 *.swo
 *~
 .#*
 #*#
 
-# Test files
-test/
-tests/
-__tests__/
-spec/
-*.test.js
-*.spec.js
-
-# SSL certificates
+# ========== SSL证书 ==========
 ssl/
 *.pem
 *.key
 *.crt
 *.csr
 
-# Backup files
-*.backup
-*.bak
-*.old
+# ========== 包管理器 ==========
+yarn.lock
+pnpm-lock.yaml
+.yarn-integrity
 
-# Development configuration
-docker-compose.override.yml
-docker-compose.local.yml
+# ========== 数据文件 ==========
+# 这些应该通过Docker卷挂载
+data/
+backups/
+exports/
+*.db
+*.sqlite
+*.sqlite3
 
-# PM2
+# ========== 本地脚本和工具 ==========
+# 测试脚本不需要在容器中
+test-*.js
+test-*.sh
+测试*.sh
+修复*.sh
+*.test.html
+本地*.sh
+
+# ========== PM2和进程管理 ==========
 ecosystem.config.js
 .pm2/
 
-# Exports and temporary data
-exports/
+# ========== 其他构建工具 ==========
+.vercel/
+.netlify/
+.firebase/
 
-# Shell scripts (except essential ones)
-*.sh
-!password-admin-tool.sh
-!test-force-password-change.sh
-
-# Local development files
-.local/
-local/ 
+# ========== 重要注释 ==========
+# 以下文件/目录会被包含在构建上下文中：
+# - src/ (源码)
+# - server/ (后端代码) 
+# - public/ (静态资源)
+# - package.json 和 package-lock.json
+# - astro.config.mjs, tsconfig.json, tailwind.config.js
+# - env.example 

@@ -78,9 +78,9 @@ jobs:
           echo "🏗️ 系统架构: $(uname -m)"
           echo "🔍 Rollup状态: $(npm list rollup 2>/dev/null || echo 'Rollup未直接安装')"
 
-      - name: Test frontend build with fallback
+      - name: Verify frontend build capability (Docker will build in container)
         run: |
-          echo "🏗️ 测试前端构建..."
+          echo "🏗️ 验证前端构建能力（实际构建在Docker容器内进行）..."
           
           # 设置构建环境变量，强制使用JavaScript fallback
           export ROLLUP_NO_NATIVE=1
