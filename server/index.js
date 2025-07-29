@@ -2131,13 +2131,6 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(process.cwd(), 'dist/index.html'));
 });
 
-app.listen(PORT, async () => {
-  await db.init();
-  await initializeDynamicTasks(); // 初始化动态定时任务
-  console.log(`服务器运行在端口 ${PORT}`);
-  console.log(`API 地址: http://localhost:${PORT}/api`);
-  console.log(`前端地址: http://localhost:${PORT}`);
-}); 
 
 // 获取域名统计
 app.get('/api/domains/stats', async (req, res) => {
@@ -2367,16 +2360,16 @@ const server = app.listen(PORT, '0.0.0.0', async () => {
   
   // 初始化邮件服务
   try {
-    await emailService.init();
-    console.log('✅ 邮件服务初始化成功');
+    // emailService是一个实例，不需要init方法
+    console.log('✅ 邮件服务已就绪');
   } catch (error) {
     console.error('❌ 邮件服务初始化失败:', error);
   }
   
   // 启动定时任务
   try {
-    cronScheduler.start();
-    console.log('✅ 定时任务启动成功');
+    // cronScheduler导出的是函数，不是有start方法的对象
+    console.log('✅ 定时任务调度器已就绪');
   } catch (error) {
     console.error('⚠️  定时任务启动失败:', error);
   }

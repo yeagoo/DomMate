@@ -2,7 +2,7 @@ import sqlite3 from 'sqlite3';
 import { promisify } from 'util';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
-import { existsSync, mkdirSync } from 'fs';
+import { existsSync, mkdirSync, writeFileSync, unlinkSync } from 'fs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -41,8 +41,8 @@ class DomainDatabase {
       try {
         // 尝试写入测试文件来检查权限
         const testFile = join(dataDir, '.write-test');
-        require('fs').writeFileSync(testFile, 'test');
-        require('fs').unlinkSync(testFile);
+        writeFileSync(testFile, 'test');
+        unlinkSync(testFile);
         console.log(`✅ 数据目录权限正常: ${dataDir}`);
       } catch (err) {
         console.error(`❌ 数据目录权限不足: ${err.message}`);
