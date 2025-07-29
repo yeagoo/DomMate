@@ -1,66 +1,50 @@
 # ==========================================
-# DomMate - Ubuntu 24.04 + Node.js 22版本
-# 解决编码问题和使用最新技术栈
+# DomMate - Node.js 22 Alpine版 Dockerfile
+# 基于官方Node.js 22 Alpine镜像
 # ==========================================
 
-FROM ubuntu:24.04
+FROM node:22-alpine
 
 # 设置环境变量
-ENV DEBIAN_FRONTEND=noninteractive
 ENV NODE_ENV=production
 ENV SERVER_HOST=0.0.0.0
 ENV SERVER_PORT=3001
 ENV DATABASE_PATH=/app/data/domains.db
 ENV BACKUP_DIR=/app/data/backups
-ENV LC_ALL=C.UTF-8
-ENV LANG=C.UTF-8
 
-# 设置时区
-RUN ln -snf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && \
-    echo Asia/Shanghai > /etc/timezone
-
-# 更新系统包并安装基础依赖
-RUN apt-get update && apt-get install -y \
+# 安装额外依赖
+RUN apk add --no-cache \
+    sqlite \
     curl \
-    wget \
-    ca-certificates \
-    gnupg \
-    lsb-release \
-    sqlite3 \
+    bash \
     python3 \
-    python3-pip \
-    build-essential \
-    locales \
-    locales-all \
-    && rm -rf /var/lib/apt/lists/*
+    make \
+    g++ \
+    && rm -rf /var/cache/apk/*
 
-# 配置locale
-RUN locale-gen en_US.UTF-8 zh_CN.UTF-8 && \
-    update-locale LANG=en_US.UTF-8
-
-# 安装Node.js 22 - 使用NodeSource官方仓库
-RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && \
-    apt-get install -y nodejs && \
-    rm -rf /var/lib/apt/lists/*
-
-# 验证Node.js版本
-RUN node --version && npm --version
-
-# 创建应用用户和组
-RUN groupadd -g 1001 dommate && \
-    useradd -r -u 1001 -g dommate dommate
+# 创建应用用户
+RUN addgroup -g 1001 -S dommate && \
+    adduser -S dommate -u 1001 -G dommate
 
 # 设置工作目录
 WORKDIR /app
 
-# 创建必要目录并设置权限
+# 创建必要目录
 RUN mkdir -p /app/data /app/logs /app/backups /app/temp/exports && \
-    chown -R dommate:dommate /app && \
-    chmod -R 755 /app
+    chown -R dommate:dommate /app
 
-# 复制应用文件（包括node_modules）
+# 复制package文件
 COPY --chown=dommate:dommate package*.json ./
-COPY --chown=dommate:dommate node_modules/ ./node_modules/
+
+# 设置npm配置并安装依赖
+RUN npm config set registry https://registry.npmmirror.com/ || \
+    npm config set registry https://registry.npm.taobao.org/ || \
+    echo "使用默认registry" && \
+    npm cache clean --force && \
+    npm install --production --legacy-peer-deps --no-audit --no-fund && \
+    npm cache clean --force
+
+# 复制应用文件
 COPY --chown=dommate:dommate server/ ./server/
 COPY --chown=dommate:dommate dist/ ./dist/
 COPY --chown=dommate:dommate public/ ./public/
@@ -72,28 +56,46 @@ RUN cat > /app/entrypoint.sh << 'EOF'
 #!/bin/bash
 set -e
 
-echo "🚀 DomMate 容器启动中 (Ubuntu 24.04)..."
+echo "🚀 DomMate 容器启动中..."
 echo "📊 Node.js 版本: $(node --version)"
+echo "📊 npm 版本: $(npm --version)"
 echo "📊 系统架构: $(uname -m)"
+echo "📊 Alpine 版本: $(cat /etc/alpine-release)"
 echo "📊 运行用户: $(whoami)"
-echo "🌍 系统版本: $(cat /etc/os-release | head -1)"
 
 # 确保数据目录存在
+echo "📁 确保数据目录存在..."
 mkdir -p /app/data/backups
+
+# 检查目录权限
+if [ -w "/app/data" ]; then
+    echo "✅ 数据目录权限正常"
+else
+    echo "⚠️ 数据目录权限不足，尝试修复..."
+    chmod -R 755 /app/data 2>/dev/null || echo "权限修复失败，继续启动..."
+fi
 
 # 显示环境信息
 echo "⚙️ 环境配置:"
 echo "  • 数据库路径: ${DATABASE_PATH}"
 echo "  • 备份目录: ${BACKUP_DIR}"
 echo "  • 服务端口: ${SERVER_PORT}"
-echo "  • 语言环境: ${LANG}"
+echo "  • Node环境: ${NODE_ENV}"
 
 # 检查前端构建产物
 if [ -f "/app/dist/index.html" ]; then
     echo "✅ 前端构建产物存在"
     echo "📊 前端文件数量: $(ls /app/dist/ | wc -l)"
+    ls -la /app/dist/
 else
     echo "❌ 前端构建产物缺失"
+fi
+
+# 检查server目录
+if [ -f "/app/server/index.js" ]; then
+    echo "✅ 后端服务文件存在"
+else
+    echo "❌ 后端服务文件缺失"
 fi
 
 # 检查node_modules
@@ -102,19 +104,6 @@ if [ -d "/app/node_modules" ]; then
     echo "📦 依赖包数量: $(ls /app/node_modules/ | wc -l)"
 else
     echo "❌ Node.js依赖缺失"
-fi
-
-# 检查关键依赖
-if [ -d "/app/node_modules/fontkit" ]; then
-    echo "✅ fontkit依赖存在"
-else
-    echo "⚠️  fontkit依赖缺失"
-fi
-
-if [ -d "/app/node_modules/pdfkit" ]; then
-    echo "✅ pdfkit依赖存在"
-else
-    echo "⚠️  pdfkit依赖缺失"
 fi
 
 echo "🎯 启动DomMate应用..."
