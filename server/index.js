@@ -2303,3 +2303,129 @@ app.patch('/api/domains/:id/notes', async (req, res) => {
     res.status(500).json({ error: '更新备注失败: ' + error.message });
   }
 });
+
+// ========== 前端路由支持 ==========
+
+// 处理前端SPA路由 - 将所有非API请求重定向到index.html
+app.get('*', (req, res) => {
+  // 排除API路径
+  if (req.path.startsWith('/api/') || req.path.startsWith('/health')) {
+    return res.status(404).json({ error: 'API endpoint not found' });
+  }
+  
+  // 检查是否请求静态资源
+  const staticExtensions = ['.js', '.css', '.png', '.jpg', '.jpeg', '.gif', '.ico', '.svg', '.woff', '.woff2', '.ttf', '.eot'];
+  const hasStaticExtension = staticExtensions.some(ext => req.path.toLowerCase().endsWith(ext));
+  
+  if (hasStaticExtension) {
+    return res.status(404).send('Static file not found');
+  }
+  
+  // 对于所有其他请求，返回index.html以支持前端路由
+  const indexPath = path.join(process.cwd(), 'dist', 'index.html');
+  
+  // 检查index.html是否存在
+  if (!fsSync.existsSync(indexPath)) {
+    console.error('❌ 前端构建产物不存在:', indexPath);
+    return res.status(500).send(`
+      <html>
+        <head><title>DomMate - 构建错误</title></head>
+        <body>
+          <h1>🔧 DomMate 启动中...</h1>
+          <p>前端构建产物尚未准备就绪，请稍候片刻。</p>
+          <p>如果此问题持续存在，请检查构建配置。</p>
+          <script>setTimeout(() => location.reload(), 5000);</script>
+        </body>
+      </html>
+    `);
+  }
+  
+  res.sendFile(indexPath);
+});
+
+// ========== 服务器启动 ==========
+
+// 启动服务器
+const server = app.listen(PORT, '0.0.0.0', async () => {
+  console.log('🚀 =================================');
+  console.log('🎉 DomMate 服务器启动成功！');
+  console.log('🚀 =================================');
+  console.log(`📊 Node.js 版本: ${process.version}`);
+  console.log(`🌐 服务地址: http://0.0.0.0:${PORT}`);
+  console.log(`📱 本地访问: http://localhost:${PORT}`);
+  console.log(`🔗 英文版本: http://localhost:${PORT}/en`);
+  console.log(`❤️  健康检查: http://localhost:${PORT}/health`);
+  console.log('🚀 =================================');
+  
+  // 初始化数据库
+  try {
+    await db.init();
+    console.log('✅ 数据库连接成功');
+  } catch (error) {
+    console.error('❌ 数据库连接失败:', error);
+  }
+  
+  // 初始化邮件服务
+  try {
+    await emailService.init();
+    console.log('✅ 邮件服务初始化成功');
+  } catch (error) {
+    console.error('❌ 邮件服务初始化失败:', error);
+  }
+  
+  // 启动定时任务
+  try {
+    cronScheduler.start();
+    console.log('✅ 定时任务启动成功');
+  } catch (error) {
+    console.error('⚠️  定时任务启动失败:', error);
+  }
+  
+  // 检查前端构建产物
+  const distPath = path.join(process.cwd(), 'dist');
+  const indexPath = path.join(distPath, 'index.html');
+  
+  if (fsSync.existsSync(indexPath)) {
+    console.log('✅ 前端构建产物存在');
+    try {
+      const stats = await fs.stat(distPath);
+      const files = await fs.readdir(distPath);
+      console.log(`📦 前端文件数量: ${files.length}`);
+    } catch (error) {
+      console.log('⚠️  无法读取前端文件信息');
+    }
+  } else {
+    console.log('❌ 前端构建产物缺失');
+    console.log('🔧 请确保前端已正确构建到 dist/ 目录');
+  }
+  
+  console.log('🎯 DomMate 已就绪，开始监控域名！');
+});
+
+// 优雅关闭
+process.on('SIGTERM', () => {
+  console.log('🛑 收到终止信号，正在优雅关闭服务器...');
+  server.close(() => {
+    console.log('✅ 服务器已关闭');
+    process.exit(0);
+  });
+});
+
+process.on('SIGINT', () => {
+  console.log('🛑 收到中断信号，正在优雅关闭服务器...');
+  server.close(() => {
+    console.log('✅ 服务器已关闭');
+    process.exit(0);
+  });
+});
+
+// 处理未捕获的异常
+process.on('uncaughtException', (error) => {
+  console.error('💥 未捕获的异常:', error);
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('💥 未处理的Promise拒绝:', reason);
+  process.exit(1);
+});
