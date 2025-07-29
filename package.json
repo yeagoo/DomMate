@@ -3,7 +3,14 @@
   "type": "module",
   "version": "0.1.0",
   "description": "DomMate - 专业的域名到期监控解决方案",
-  "keywords": ["domain", "monitoring", "expiry", "dommate", "nodejs", "astro"],
+  "keywords": [
+    "domain",
+    "monitoring",
+    "expiry",
+    "dommate",
+    "nodejs",
+    "astro"
+  ],
   "homepage": "https://dommate.com",
   "repository": {
     "type": "git",
@@ -64,6 +71,7 @@
     "whois": "^2.13.8"
   },
   "devDependencies": {
+    "@rollup/rollup-linux-arm64-gnu": "^4.46.1",
     "@types/cors": "^2.8.17",
     "@types/multer": "^1.4.11",
     "@types/node": "^20.11.30",
