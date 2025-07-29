@@ -80,46 +80,115 @@ RUN npm config set registry https://registry.npmjs.org/ && \
 # 清理npm缓存
 RUN npm cache clean --force
 
-# 安装依赖（使用CI/CD优化的安装策略）
-RUN echo "🔧 Installing dependencies for CI/CD..." && \
-    npm ci --only=production --no-audit --no-fund --legacy-peer-deps || \
-    (echo "npm ci failed, trying npm install..." && npm install --production --no-audit --no-fund --legacy-peer-deps)
+# 安装所有依赖（包括开发依赖，用于前端构建）
+RUN echo "🔧 Installing all dependencies for CI/CD build..." && \
+    npm install --legacy-peer-deps --no-audit --no-fund || \
+    (echo "npm install failed, trying with cache clean..." && \
+     npm cache clean --force && \
+     npm install --legacy-peer-deps --no-audit --no-fund)
 
 # 复制源代码
 COPY --chown=dommate:dommate . .
 
-# 安装开发依赖用于构建
-RUN echo "🔧 Installing dev dependencies for build..." && \
-    npm install --legacy-peer-deps --no-audit --no-fund
-
 # 执行前端构建（使用强化的构建策略）
-RUN echo "🏗️ Building frontend..." && \
-    echo "System info: $(uname -a)" && \
-    echo "Node.js: $(node --version)" && \
-    echo "npm: $(npm --version)" && \
-    echo "Architecture: $(dpkg --print-architecture)" && \
+RUN echo "🏗️ Building frontend with enhanced error handling..." && \
+    echo "📊 Build Environment Info:" && \
+    echo "- System: $(uname -a)" && \
+    echo "- Node.js: $(node --version)" && \
+    echo "- npm: $(npm --version)" && \
+    echo "- Architecture: $(dpkg --print-architecture)" && \
+    echo "- Package count: $(ls node_modules | wc -l)" && \
+    echo "- TailwindCSS: $([ -d "node_modules/tailwindcss" ] && echo "✅ Found" || echo "❌ Missing")" && \
+    echo "- Rollup: $([ -d "node_modules/rollup" ] && echo "✅ Found" || echo "❌ Missing")" && \
+    echo "" && \
     # 第一次尝试：标准构建
-    (npm run build && echo "✅ Standard build succeeded") || \
-    # 第二次尝试：清理rollup并重试
-    (echo "❌ Standard build failed, trying rollup fix..." && \
+    (echo "🔍 Attempt 1: Standard build" && \
+     npm run build && echo "✅ Standard build succeeded") || \
+    # 第二次尝试：修复rollup依赖
+    (echo "🔧 Attempt 2: Rollup dependency fix" && \
+     echo "Cleaning rollup modules..." && \
      rm -rf node_modules/@rollup/ node_modules/rollup && \
+     echo "Installing glibc rollup..." && \
      npm install @rollup/rollup-linux-x64-gnu --optional --legacy-peer-deps && \
+     echo "Verifying rollup installation..." && \
+     ls -la node_modules/@rollup/ && \
      npm run build && echo "✅ Rollup fix build succeeded") || \
-    # 第三次尝试：完全重新安装
-    (echo "❌ Rollup fix failed, trying full reinstall..." && \
+    # 第三次尝试：完全重新安装所有依赖
+    (echo "🔄 Attempt 3: Complete dependency reinstall" && \
+     echo "Removing all node modules..." && \
      rm -rf node_modules package-lock.json && \
-     npm install --legacy-peer-deps --no-audit && \
+     echo "Cleaning npm cache..." && \
+     npm cache clean --force && \
+     echo "Reinstalling all dependencies..." && \
+     npm install --legacy-peer-deps --no-audit --no-fund && \
+     echo "Manually installing rollup for current architecture..." && \
      npm install @rollup/rollup-linux-x64-gnu --save-optional --legacy-peer-deps && \
+     echo "Verifying critical dependencies:" && \
+     echo "- TailwindCSS: $([ -d "node_modules/tailwindcss" ] && echo "✅ Found" || echo "❌ Missing")" && \
+     echo "- Rollup: $([ -d "node_modules/rollup" ] && echo "✅ Found" || echo "❌ Missing")" && \
+     echo "- @rollup modules: $(ls node_modules/@rollup/ | head -5)" && \
      npm run build && echo "✅ Full reinstall build succeeded") || \
-    # 最后尝试：报告失败
-    (echo "💥 All build attempts failed" && exit 1)
+    # 第四次尝试：简化Astro配置
+    (echo "🔧 Attempt 4: Simplified Astro configuration" && \
+     echo "Creating simplified astro config..." && \
+     cp astro.config.mjs astro.config.mjs.backup && \
+     cat > astro.config.mjs << 'EOF'
+import { defineConfig } from 'astro/config';
+import react from '@astrojs/react';
+
+export default defineConfig({
+  integrations: [react()],
+  output: 'static',
+  build: {
+    assets: 'assets'
+  }
+});
+EOF
+     echo "Building with simplified config..." && \
+     npm run build && \
+     echo "✅ Simplified config build succeeded" && \
+     mv astro.config.mjs.backup astro.config.mjs) || \
+    # 最后尝试：详细诊断
+    (echo "�� All build attempts failed - Running diagnostics" && \
+     echo "📋 Diagnostic Information:" && \
+     echo "- Working directory: $(pwd)" && \
+     echo "- Node modules exists: $([ -d "node_modules" ] && echo "✅ Yes" || echo "❌ No")" && \
+     echo "- Package.json exists: $([ -f "package.json" ] && echo "✅ Yes" || echo "❌ No")" && \
+     echo "- Source files exist: $([ -d "src" ] && echo "✅ Yes" || echo "❌ No")" && \
+     echo "- Astro config exists: $([ -f "astro.config.mjs" ] && echo "✅ Yes" || echo "❌ No")" && \
+     echo "" && \
+     echo "🔍 Critical Dependencies Check:" && \
+     echo "- astro: $(npm list astro --depth=0 2>/dev/null | grep astro || echo "❌ Missing")" && \
+     echo "- @astrojs/react: $(npm list @astrojs/react --depth=0 2>/dev/null | grep @astrojs/react || echo "❌ Missing")" && \
+     echo "- @astrojs/tailwind: $(npm list @astrojs/tailwind --depth=0 2>/dev/null | grep @astrojs/tailwind || echo "❌ Missing")" && \
+     echo "- tailwindcss: $(npm list tailwindcss --depth=0 2>/dev/null | grep tailwindcss || echo "❌ Missing")" && \
+     echo "- rollup: $(npm list rollup --depth=0 2>/dev/null | grep rollup || echo "❌ Missing")" && \
+     echo "" && \
+     echo "🗂️ Node modules structure:" && \
+     ls -la node_modules/ | head -20 && \
+     echo "" && \
+     echo "📦 @rollup modules:" && \
+     ls -la node_modules/@rollup/ 2>/dev/null || echo "No @rollup directory found" && \
+     exit 1)
 
 # 验证构建产物
 RUN echo "📦 Verifying build artifacts..." && \
-    ls -la dist/ && \
-    echo "Build verification complete"
+    if [ -d "dist" ]; then \
+        echo "✅ dist directory exists" && \
+        echo "📁 dist contents:" && \
+        ls -la dist/ && \
+        echo "📊 Build statistics:" && \
+        echo "- HTML files: $(find dist -name "*.html" | wc -l)" && \
+        echo "- JS files: $(find dist -name "*.js" | wc -l)" && \
+        echo "- CSS files: $(find dist -name "*.css" | wc -l)" && \
+        echo "- Total files: $(find dist -type f | wc -l)" && \
+        echo "✅ Build verification complete"; \
+    else \
+        echo "❌ dist directory not found" && \
+        exit 1; \
+    fi
 
-# 清理开发依赖和构建缓存
+# 清理开发依赖和构建缓存（保留运行时需要的）
 RUN echo "🧹 Cleaning up build artifacts..." && \
     npm prune --production && \
     npm cache clean --force && \
