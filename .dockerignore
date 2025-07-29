@@ -1,5 +1,9 @@
-# 用于预构建镜像的 .dockerignore
-# 注意：这个版本允许 node_modules 和 dist
+# Dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
 
 # Environment files
 .env*
@@ -43,7 +47,8 @@ coverage/
 *.lcov
 .nyc_output/
 
-# Build outputs - 这里不排除dist和node_modules，因为我们需要它们
+# Build outputs (will be generated in container)
+dist/
 .astro/
 .output/
 .vercel/
@@ -63,7 +68,7 @@ coverage/
 # Docker files (avoid recursion)
 Dockerfile*
 docker-compose*.yml
-.dockerignore*
+.dockerignore
 
 # Docker data
 docker-data/
