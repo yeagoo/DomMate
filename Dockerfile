@@ -48,8 +48,6 @@ RUN npm config set registry https://registry.npmmirror.com/ || \
 COPY --chown=dommate:dommate src/ ./src/
 COPY --chown=dommate:dommate public/ ./public/
 COPY --chown=dommate:dommate astro.config.mjs ./
-COPY --chown=dommate:dommate tsconfig.json ./
-COPY --chown=dommate:dommate tailwind.config.js ./
 
 # 复制后端文件
 COPY --chown=dommate:dommate server/ ./server/
