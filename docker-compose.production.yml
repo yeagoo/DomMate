@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  dommate:
+    image: ghcr.io/yeagoo/dommate:latest
+    container_name: dommate
+    ports:
+      - "3001:3001"
+    volumes:
+      - dommate-data:/app/data
+      - dommate-logs:/app/logs
+      - dommate-backups:/app/backups
+    environment:
+      - NODE_ENV=production
+      - SERVER_HOST=0.0.0.0
+      - SERVER_PORT=3001
+      - DATABASE_PATH=/app/data/domains.db
+      - BACKUP_DIR=/app/data/backups
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  dommate-data:
+    driver: local
+  dommate-logs:
+    driver: local
+  dommate-backups:
+    driver: local
+
+networks:
+  default:
+    name: dommate-network 
